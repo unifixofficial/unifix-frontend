@@ -5,27 +5,18 @@ import { Stack, useRouter } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
+
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Alert,
+  Animated,
   BackHandler,
-  Image,
   Platform,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { auth, db } from "../firebase/firebaseConfig";
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -84,10 +75,9 @@ async function registerForPushNotifications(): Promise<string | null> {
     }
 
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-    console.log("[Push] Token received:", tokenData.data); // ← ADD THIS
     return tokenData.data;
   } catch (e) {
-    console.error("[Push] Registration error:", e); // ← ADD THIS
+    console.error("[Push] Registration error:", e);
     return null;
   }
 }
@@ -107,11 +97,101 @@ async function savePushTokenToServer(token: string) {
       body: JSON.stringify({ expoPushToken: token }),
     });
     const data = await res.json();
-    console.log("[Push] Save token response:", data); // ← ADD THIS
+    console.log("[Push] Save token response:", data);
   } catch (e) {
-    console.error("[Push] Save token error:", e); // ← ADD THIS
+    console.error("[Push] Save token error:", e);
   }
 }
+
+function UnifixSplash() {
+  const logoScale = useRef(new Animated.Value(0.75)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const fromOpacity = useRef(new Animated.Value(0)).current;
+  const nameOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.parallel([
+        Animated.spring(logoScale, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 55,
+          friction: 8,
+        }),
+        Animated.timing(logoOpacity, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.delay(500),
+      Animated.parallel([
+        Animated.timing(fromOpacity, {
+          toValue: 1,
+          duration: 350,
+          useNativeDriver: true,
+        }),
+        Animated.timing(nameOpacity, {
+          toValue: 1,
+          duration: 350,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+  }, []);
+
+  return (
+    <View style={splashStyles.container}>
+      <Animated.Image
+        source={require("../assets/splash.png")}
+        style={[
+          splashStyles.logo,
+          { opacity: logoOpacity, transform: [{ scale: logoScale }] },
+        ]}
+        resizeMode="contain"
+      />
+      <View style={splashStyles.footer}>
+        <Animated.Text style={[splashStyles.from, { opacity: fromOpacity }]}>
+          from
+        </Animated.Text>
+        <Animated.Text style={[splashStyles.name, { opacity: nameOpacity }]}>
+          VCET
+        </Animated.Text>
+      </View>
+    </View>
+  );
+}
+
+const splashStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  logo: {
+    width: 160,
+    height: 160,
+  },
+  footer: {
+    position: "absolute",
+    bottom: 60,
+    alignItems: "center",
+    gap: 4,
+  },
+  from: {
+    fontSize: 13,
+    color: "#94a3b8",
+    fontWeight: "400",
+    letterSpacing: 0.5,
+  },
+  name: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#16a34a",
+    letterSpacing: 2,
+  },
+});
 
 export default function RootLayout() {
   const router = useRouter();
@@ -156,55 +236,112 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    let authUnsubscribe: (() => void) | null = null;
+
+    const initAuth = async () => {
       try {
-        if (!firebaseUser) {
-          currentRouteRef.current = "/login";
-          setInitialRoute("/login");
+        const cachedUserStr = await AsyncStorage.getItem("unifix_cached_user");
+        const cachedUser = cachedUserStr ? JSON.parse(cachedUserStr) : null;
+
+        if (
+          cachedUser &&
+          cachedUser.uid &&
+          cachedUser.role &&
+          cachedUser.route
+        ) {
+          currentRouteRef.current = cachedUser.route;
+          setInitialRoute(cachedUser.route);
           setAppReady(true);
-          return;
         }
 
-        await firebaseUser.getIdToken(true);
-        const snap = await getDoc(doc(db, "users", firebaseUser.uid));
+        authUnsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+          try {
+            if (!firebaseUser) {
+              await AsyncStorage.removeItem("unifix_cached_user");
+              currentRouteRef.current = "/login";
+              setInitialRoute("/login");
+              setAppReady(true);
+              return;
+            }
 
-        if (!snap.exists() || !snap.data()?.profileCompleted) {
-          currentRouteRef.current = "/complete-profile";
-          setInitialRoute("/complete-profile");
-          setAppReady(true);
-          return;
-        }
+            let idToken;
+            try {
+              idToken = await firebaseUser.getIdToken(true);
+            } catch (tokenError) {
+              console.log("Token refresh failed, using cached session");
+              return;
+            }
 
-        const { role, verificationStatus } = snap.data();
+            const snap = await getDoc(doc(db, "users", firebaseUser.uid));
 
-        if (role === "staff" && verificationStatus !== "approved") {
-          currentRouteRef.current = "/complete-profile";
-          setInitialRoute("/complete-profile");
-          setAppReady(true);
-          return;
-        }
+            if (!snap.exists() || !snap.data()?.profileCompleted) {
+              await AsyncStorage.removeItem("unifix_cached_user");
+              currentRouteRef.current = "/complete-profile";
+              setInitialRoute("/complete-profile");
+              setAppReady(true);
+              return;
+            }
 
-        const pushToken = await registerForPushNotifications();
-        if (pushToken) {
-          await savePushTokenToServer(pushToken);
-        }
+            const { role, verificationStatus } = snap.data();
 
-        const route =
-          role === "admin"
-            ? "/admin-dashboard"
-            : role === "staff" && verificationStatus === "approved"
-              ? "/staff-dashboard"
-              : "/";
+            if (role === "staff" && verificationStatus !== "approved") {
+              await AsyncStorage.removeItem("unifix_cached_user");
+              currentRouteRef.current = "/complete-profile";
+              setInitialRoute("/complete-profile");
+              setAppReady(true);
+              return;
+            }
 
-        currentRouteRef.current = route;
-        setInitialRoute(route);
-        setAppReady(true);
-      } catch {
+            const route =
+              role === "admin"
+                ? "/admin-dashboard"
+                : role === "staff" && verificationStatus === "approved"
+                  ? "/staff-dashboard"
+                  : "/";
+
+            await AsyncStorage.setItem(
+              "unifix_cached_user",
+              JSON.stringify({
+                uid: firebaseUser.uid,
+                role: role,
+                route: route,
+                cachedAt: Date.now(),
+              }),
+            );
+
+            const isOnAuthScreen = [
+              "/login",
+              "/signup",
+              "/otp-verification",
+            ].includes(currentRouteRef.current ?? "");
+            if (!currentRouteRef.current || isOnAuthScreen) {
+              currentRouteRef.current = route;
+              setInitialRoute(route);
+              setAppReady(true);
+            }
+
+            const pushToken = await registerForPushNotifications();
+            if (pushToken) {
+              await savePushTokenToServer(pushToken);
+            }
+          } catch (err) {
+            console.log("Firebase auth error:", err);
+            const hasCache = await AsyncStorage.getItem("unifix_cached_user");
+            if (!hasCache && !currentRouteRef.current) {
+              currentRouteRef.current = "/login";
+              setInitialRoute("/login");
+              setAppReady(true);
+            }
+          }
+        });
+      } catch (err) {
         currentRouteRef.current = "/login";
         setInitialRoute("/login");
         setAppReady(true);
       }
-    });
+    };
+
+    initAuth();
 
     notificationListener.current =
       Notifications.addNotificationReceivedListener(() => {});
@@ -290,7 +427,7 @@ export default function RootLayout() {
       );
 
     return () => {
-      unsubscribe();
+      if (authUnsubscribe) authUnsubscribe();
       if (notificationListener.current) notificationListener.current.remove();
       if (responseListener.current) responseListener.current.remove();
     };
@@ -303,21 +440,7 @@ export default function RootLayout() {
   }, [appReady, initialRoute]);
 
   if (!appReady) {
-    return (
-      <View style={styles.splash}>
-        <View style={styles.splashCenter}>
-          <Image
-            source={require("../assets/splash.png")}
-            style={{ width: 140, height: 140 }}
-            resizeMode="contain"
-          />
-        </View>
-        <View style={styles.vcetContainer}>
-          <Text style={styles.vcetFrom}>from</Text>
-          <Text style={styles.vcetText}>VCET</Text>
-        </View>
-      </View>
-    );
+    return <UnifixSplash />;
   }
 
   return (

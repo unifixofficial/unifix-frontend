@@ -40,9 +40,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { auth, db } from "../firebase/firebaseConfig";
 
-import { saveCache, loadCache, loadCacheForce } from '../utils/cache';
-import { authAPI, complaintsAPI, lostFoundAPI } from "../services/api";
 import ScreenWrapper from "@/wrappers/ScreenWrapper";
+import { authAPI, complaintsAPI, lostFoundAPI } from "../services/api";
+import { loadCacheForce, saveCache } from "../utils/cache";
 
 const CLOUDINARY_CLOUD = "dcizaxjul";
 const CLOUDINARY_PRESET = "unifix_upload";
@@ -311,7 +311,7 @@ const iv = StyleSheet.create({
 
 export default function StaffDashboardScreen() {
   const insets = useSafeAreaInsets();
-const { openComplaintId, openTab, openLFTab } = useLocalSearchParams<{
+  const { openComplaintId, openTab, openLFTab } = useLocalSearchParams<{
     openComplaintId?: string;
     openTab?: string;
     openLFTab?: string;
@@ -323,7 +323,7 @@ const { openComplaintId, openTab, openLFTab } = useLocalSearchParams<{
   const [claimItems, setClaimItems] = useState<ClaimItem[]>([]);
   const [staffData, setStaffData] = useState<StaffData | null>(null);
   const [staffUid, setStaffUid] = useState<string | null>(null);
-const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [avgRating, setAvgRating] = useState<number | null>(null);
@@ -341,6 +341,23 @@ const [loading, setLoading] = useState(true);
   const [rejectVisible, setRejectVisible] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
+  const [showPostFoundModal, setShowPostFoundModal] = useState(false);
+  const [postFoundItemName, setPostFoundItemName] = useState("");
+  const [postFoundCategory, setPostFoundCategory] = useState("Others");
+  const [postFoundDescription, setPostFoundDescription] = useState("");
+  const [postFoundRoomInput, setPostFoundRoomInput] = useState("");
+  const [postFoundResolvedRoom, setPostFoundResolvedRoom] = useState<{
+    label: string;
+  } | null>(null);
+  const [postFoundRoomError, setPostFoundRoomError] = useState("");
+  const [postFoundCollectLocation, setPostFoundCollectLocation] = useState("");
+  const [postFoundPhoto, setPostFoundPhoto] = useState<{
+    uri: string;
+    name: string;
+  } | null>(null);
+  const [postFoundSubmitting, setPostFoundSubmitting] = useState(false);
+  const [postFoundUploadingPhoto, setPostFoundUploadingPhoto] = useState(false);
+  const [postFoundError, setPostFoundError] = useState("");
   const [handoverItem, setHandoverItem] = useState<LostItem | null>(null);
   const [handedToName, setHandedToName] = useState("");
   const [handoverLoading, setHandoverLoading] = useState(false);
@@ -423,8 +440,8 @@ const [loading, setLoading] = useState(true);
       where("assignedTo", "==", uid),
     );
 
-    const pendingUnsub = onSnapshot(pendingQ, () => refetchAll(uid));
-    const assignedUnsub = onSnapshot(assignedQ, () => refetchAll(uid));
+    const pendingUnsub = onSnapshot(pendingQ, () => refetchAll(uid, true));
+    const assignedUnsub = onSnapshot(assignedQ, () => refetchAll(uid, true));
 
     const userUnsub = onSnapshot(doc(db, "users", uid), (snap) => {
       if (snap.exists()) {
@@ -441,9 +458,14 @@ const [loading, setLoading] = useState(true);
     };
   }, []);
 
-const refetchAll = useCallback(async (uid: string) => {
-    const cached = await loadCacheForce('staff_complaints');
-    if (cached) { setAllComplaints(cached); setLoading(false); }
+  const refetchAll = useCallback(async (uid: string, skipCache = false) => {
+    if (!skipCache) {
+      const cached = await loadCacheForce("staff_complaints");
+      if (cached) {
+        setAllComplaints(cached);
+        setLoading(false);
+      }
+    }
     try {
       const data = await complaintsAPI.staffComplaints();
       const combined: Complaint[] = [
@@ -459,7 +481,7 @@ const refetchAll = useCallback(async (uid: string) => {
         return true;
       });
       setAllComplaints(unique);
-      saveCache('staff_complaints', unique);
+      saveCache("staff_complaints", unique);
       setAvgRating(data.avgRating ?? null);
       setRatingCount(data.ratingCount ?? 0);
       setIsOffline(false);
@@ -473,30 +495,248 @@ const refetchAll = useCallback(async (uid: string) => {
 
   const lfUnsubRef = useRef<(() => void)[]>([]);
 
-const fetchLostFound = useCallback(async (uid: string) => {
-  try {
-    const { getDocs } = await import("firebase/firestore");
+  const fetchLostFound = useCallback(async (uid: string) => {
+    try {
+      const { getDocs } = await import("firebase/firestore");
 
-    const feedSnap = await getDocs(
-      query(collection(db, "lostFound"), where("status", "==", "available"), orderBy("createdAt", "desc"))
-    );
-    setFeedItems(feedSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any), isMyPost: d.data().postedBy === uid })));
+      const feedSnap = await getDocs(
+        query(
+          collection(db, "lostFound"),
+          where("status", "==", "available"),
+          orderBy("createdAt", "desc"),
+        ),
+      );
+      setFeedItems(
+        feedSnap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as any),
+          isMyPost: d.data().postedBy === uid,
+        })),
+      );
 
-    const myPostsSnap = await getDocs(
-      query(collection(db, "lostFound"), where("postedBy", "==", uid), orderBy("createdAt", "desc"))
-    );
-    setMyPosts(myPostsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any), isMyPost: true })));
+      const myPostsSnap = await getDocs(
+        query(
+          collection(db, "lostFound"),
+          where("postedBy", "==", uid),
+          orderBy("createdAt", "desc"),
+        ),
+      );
+      setMyPosts(
+        myPostsSnap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as any),
+          isMyPost: true,
+        })),
+      );
 
-    const claimsSnap = await getDocs(
-      query(collection(db, "claims"), orderBy("createdAt", "desc"))
-    );
-    setClaimItems(claimsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
+      const claimsSnap = await getDocs(
+        query(collection(db, "claims"), orderBy("createdAt", "desc")),
+      );
+      setClaimItems(
+        claimsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })),
+      );
 
-    setIsOffline(false);
-  } catch {
-    setIsOffline(true);
-  }
-}, []);
+      setIsOffline(false);
+    } catch {
+      setIsOffline(true);
+    }
+  }, []);
+
+  const LF_ROOM_MAP: Record<string, string> = {
+    "003A": "Photocopy Center",
+    "003": "First Aid / Counselling Room",
+    "004": "Conference Room",
+    "007": "Basic Workshop",
+    "008": "Machine Shop",
+    "009": "Seminar Hall",
+    "013": "Thermal Engineering Lab",
+    "014": "Theory of Machines Lab",
+    "015": "Refrigeration & AC Lab",
+    "016": "HOD Civil Engineering",
+    "017": "Geotechnics Lab",
+    "019": "Transportation Engineering Lab",
+    "020": "Fluid Mechanics Lab",
+    "021": "Applied Hydraulics Lab",
+    "022": "Basic Workshop II",
+    "023": "Material Testing Lab",
+    "024": "HOD Mechanical Engineering",
+    "101": "Administrative Office",
+    "102": "Principal's Office",
+    "112": "CAD Center",
+    "113": "Computer Lab B",
+    "114": "Networking & DevOps Lab",
+    "115": "Programming & Project Lab",
+    "117": "Environmental Engineering Lab",
+    "118": "Meeting Room",
+    "119": "Faculty Room",
+    "120": "Robotics Lab",
+    "121": "Robotics Lab",
+    "123": "Project Lab",
+    "124": "Measurement & Automation Lab",
+    "127": "Joint Director Office",
+    "201": "Cubicles / Staff Room",
+    "202": "HOD Computers",
+    "209": "HOD IT",
+    "212": "Ladies Staff Room",
+    "213": "NSS / Dept Office",
+    "214": "Classroom 1",
+    "215": "Classroom 2",
+    "216": "Classroom 3",
+    "217": "Faculty Room",
+    "218": "Classroom",
+    "219": "Computer Center",
+    "220": "Computer Center",
+    "221": "Computer Center",
+    "222": "Computer Center",
+    "223": "Computer Center",
+    "224": "Language Lab",
+    "301": "Gymkhana",
+    "302": "Gymkhana",
+    "306": "Server Room",
+    "307": "CSEDS Staff Room",
+    "312": "Tutorial Room",
+    "313": "Classroom",
+    "314": "Classroom",
+    "315": "Classroom",
+    "318": "Seminar Hall",
+    "319": "Physics Lab",
+    "320": "Classroom",
+    "321": "Classroom",
+    "322": "Chemistry Lab",
+    "323": "Classroom",
+    "401": "EXTC / VLSI Lab",
+    "402": "EXTC / VLSI Lab",
+    "406": "HOD EXTC Cabin",
+    "414": "Tutorial Room",
+    "415": "Classroom",
+    "416": "Classroom",
+    "417": "Classroom",
+    "420": "Classroom",
+    "421": "Drawing Hall",
+    "422": "Classroom",
+    "423": "Classroom",
+    "501": "Staff Room",
+    "502": "Staff Room",
+    "503": "Staff Room",
+    "515": "Classroom",
+    "516": "Classroom",
+    "517": "Classroom",
+    "518": "MMS Staff Room",
+    "519": "Classroom",
+    "520": "Classroom",
+    "527": "Student Activity Room",
+  };
+
+  const LF_CATEGORIES_FOUND = [
+    "Electronics",
+    "Clothing",
+    "Stationery",
+    "ID Card",
+    "Keys",
+    "Bag",
+    "Water Bottle",
+    "Earphones",
+    "Books",
+    "Others",
+  ];
+
+  const handlePostFoundRoomInput = (val: string) => {
+    setPostFoundRoomInput(val);
+    setPostFoundRoomError("");
+    if (!val.trim()) {
+      setPostFoundResolvedRoom(null);
+      return;
+    }
+    const key = val.trim().toUpperCase() === "003A" ? "003A" : val.trim();
+    if (LF_ROOM_MAP[key]) setPostFoundResolvedRoom({ label: LF_ROOM_MAP[key] });
+    else {
+      setPostFoundResolvedRoom(null);
+      if (val.trim().length >= 3) setPostFoundRoomError("Invalid room number.");
+    }
+  };
+
+  const handlePostFoundPickPhoto = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      setPostFoundPhoto({
+        uri: asset.uri,
+        name: asset.uri.split("/").pop() || `lostfound_${Date.now()}.jpg`,
+      });
+    } catch {}
+  };
+
+  const resetPostFoundForm = () => {
+    setPostFoundItemName("");
+    setPostFoundCategory("Others");
+    setPostFoundDescription("");
+    setPostFoundRoomInput("");
+    setPostFoundResolvedRoom(null);
+    setPostFoundRoomError("");
+    setPostFoundCollectLocation("");
+    setPostFoundPhoto(null);
+    setPostFoundError("");
+    setPostFoundSubmitting(false);
+    setPostFoundUploadingPhoto(false);
+  };
+
+  const handlePostFoundSubmit = async () => {
+    setPostFoundError("");
+    if (!postFoundItemName.trim())
+      return setPostFoundError("Please enter the item name.");
+    if (!postFoundResolvedRoom)
+      return setPostFoundError("Please enter a valid room number.");
+    if (!postFoundCollectLocation.trim())
+      return setPostFoundError("Please mention where to collect the item.");
+    setPostFoundSubmitting(true);
+    try {
+      let photoUrl: string | null = null;
+      if (postFoundPhoto) {
+        setPostFoundUploadingPhoto(true);
+        const formData = new FormData();
+        formData.append("file", {
+          uri: postFoundPhoto.uri,
+          type: "image/jpeg",
+          name: postFoundPhoto.name,
+        } as any);
+        formData.append("upload_preset", CLOUDINARY_PRESET);
+        formData.append("folder", "unifix/lostFound");
+        const res = await fetch(CLOUDINARY_UPLOAD_URL, {
+          method: "POST",
+          body: formData,
+        });
+        if (!res.ok) throw new Error("Image upload failed");
+        const data = await res.json();
+        photoUrl = data.secure_url;
+        setPostFoundUploadingPhoto(false);
+      }
+      const { lostFoundAPI } = require("../services/api");
+      await lostFoundAPI.postItem({
+        itemName: postFoundItemName.trim(),
+        category: postFoundCategory,
+        description: postFoundDescription.trim(),
+        roomNumber: postFoundRoomInput.trim(),
+        roomLabel: postFoundResolvedRoom.label,
+        collectLocation: postFoundCollectLocation.trim(),
+        photoUrl,
+      });
+      setShowPostFoundModal(false);
+      resetPostFoundForm();
+      if (staffUid) fetchLostFound(staffUid);
+    } catch (err: any) {
+      setPostFoundError(err.message || "Failed to post.");
+    } finally {
+      setPostFoundSubmitting(false);
+      setPostFoundUploadingPhoto(false);
+    }
+  };
 
   const registerPushToken = useCallback(async () => {
     try {
@@ -520,10 +760,10 @@ const fetchLostFound = useCallback(async (uid: string) => {
       fetchLostFound(u.uid);
       registerPushToken();
     });
- return () => {
-  unsub();
-  if (unsubRef.current) unsubRef.current();
-};
+    return () => {
+      unsub();
+      if (unsubRef.current) unsubRef.current();
+    };
   }, []);
 
   useEffect(() => {
@@ -546,7 +786,7 @@ const fetchLostFound = useCallback(async (uid: string) => {
     }
   }, [allComplaints]);
 
-useEffect(() => {
+  useEffect(() => {
     if (openTab === "lostfound") {
       setActiveTab("lostfound");
       if (openLFTab === "claims") setLostFoundTab("claims");
@@ -555,10 +795,18 @@ useEffect(() => {
     }
   }, [openTab, openLFTab]);
 
-  
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    if (staffUid) refetchAll(staffUid);
+    try {
+      if (staffUid) {
+        await Promise.all([
+          refetchAll(staffUid, true),
+          fetchLostFound(staffUid),
+        ]);
+      }
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleCall = (phone?: string) => {
@@ -632,8 +880,8 @@ useEffect(() => {
       await lostFoundAPI.handover(handoverItem.id, handedToName.trim());
       setFeedItems((prev) => prev.filter((i) => i.id !== handoverItem.id));
       setHandoverItem(null);
-     if (staffUid) fetchLostFound(staffUid);
-setRefreshing(false);
+      if (staffUid) fetchLostFound(staffUid);
+      setRefreshing(false);
     } catch (err: any) {
       setHandoverError(err.message || "Failed.");
     } finally {
@@ -808,8 +1056,6 @@ setRefreshing(false);
     }
   };
 
-
-
   const uid = staffUid ?? "";
   const pending = allComplaints.filter(
     (c) =>
@@ -830,7 +1076,13 @@ setRefreshing(false);
       Array.isArray(c.rejectedBy) && c.rejectedBy.some((r) => r.uid === uid),
   );
 
-  const allTasks = [...pending, ...active];
+  const inProgress = allComplaints.filter(
+    (c) => c.status === "in_progress" && c.assignedTo === uid,
+  );
+  const assigned = allComplaints.filter(
+    (c) => c.status === "assigned" && c.assignedTo === uid,
+  );
+  const allTasks = [...inProgress, ...assigned, ...pending];
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
@@ -948,7 +1200,7 @@ setRefreshing(false);
                 />
               ))}
               <Text style={s.taskRatingText}>
-                {(c as any).rating}/5 — rated by reporter
+                {(c as any).rating}/5, rated by reporter
               </Text>
             </View>
           )}
@@ -1167,7 +1419,7 @@ setRefreshing(false);
             <Ionicons name="location-outline" size={13} color="#374151" />
             <Text style={s.lfLocationText}>
               Room {item.roomNumber}
-              {item.roomLabel ? ` — ${item.roomLabel}` : ""}
+              {item.roomLabel ? ` , ${item.roomLabel}` : ""}
             </Text>
           </View>
           {item.collectLocation ? (
@@ -1301,7 +1553,7 @@ setRefreshing(false);
               setProfileScreen("personalInfo");
             },
           },
-       
+
           {
             icon: "lock-closed-outline" as keyof typeof Ionicons.glyphMap,
             bg: "#f0fdf4",
@@ -1804,152 +2056,22 @@ setRefreshing(false);
     },
   ];
 
- return (
-  <ScreenWrapper loading={loading} skeleton="staff" roleReady={!!staffUid && !!staffData}>
-    <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+  return (
+    <ScreenWrapper
+      loading={loading}
+      skeleton="staff"
+      roleReady={!!staffUid && !!staffData}
+    >
+      <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
-      {activeTab === "tasks" && (
-        <ScrollView
-          style={s.tabScroll}
-          contentContainerStyle={[
-            s.tabContainer,
-            { paddingBottom: bottomNavHeight + 20 },
-          ]}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={["#16a34a"]}
-            />
-          }
-        >
-          <View style={s.topBar}>
-            <View style={s.topBarLeft}>
-              <View style={s.topBarLogoCircle}>
-                <Image
-                  source={require("../assets/images/logo.png")}
-                  style={s.topBarLogoImg}
-                  resizeMode="contain"
-                />
-              </View>
-              <Text style={s.topBarTitle}>UniFiX</Text>
-            </View>
-       <View style={s.topBarRight}>
-              <TouchableOpacity onPress={() => setActiveTab("profile")}>
-                {staffData?.photoUrl ? (
-                  <Image
-                    source={{ uri: staffData.photoUrl }}
-                    style={s.topBarAvatar}
-                  />
-                ) : (
-                  <View style={s.topBarAvatarEmpty}>
-                    <Text style={s.topBarAvatarText}>
-                      {staffData?.fullName?.[0]?.toUpperCase() || "S"}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-         {isOffline && (
-            <View style={{ backgroundColor: '#f59e0b', padding: 8, alignItems: 'center', borderRadius: 8, marginBottom: 12 }}>
-              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>{"You're offline — showing cached data"}</Text>
-            </View>
-          )}
-          <View style={s.welcomeBanner}>
-            <Text style={s.welcomeLabel}>STAFF DASHBOARD</Text>
-            <Text style={s.welcomeName}>Welcome, {firstName}</Text>
-            <View style={s.welcomeDateRow}>
-              <Ionicons name="calendar-outline" size={13} color="#64748b" />
-              <Text style={s.welcomeDate}>{today}</Text>
-            </View>
-          </View>
-          <View style={s.statsGrid}>
-            {STAT_ITEMS.map((stat) => (
-              <View key={stat.label} style={s.statCard}>
-                <View
-                  style={[s.statIconWrap, { backgroundColor: stat.iconBg }]}
-                >
-                  <Ionicons
-                    name={stat.iconName}
-                    size={20}
-                    color={stat.iconColor}
-                  />
-                </View>
-                <Text style={s.statLabel}>{stat.label}</Text>
-                <Text style={s.statValue}>{stat.value}</Text>
-                <Text style={[s.statSub, { color: stat.subColor }]}>
-                  {stat.sub}
-                </Text>
-              </View>
-            ))}
-          </View>
-          <View style={s.sectionHeader}>
-            <Text style={s.sectionTitle}>Active Tasks</Text>
-          </View>
-          {allTasks.length === 0 ? (
-            <View style={s.emptyState}>
-              <View style={s.emptyIconWrap}>
-                <Ionicons
-                  name="checkmark-circle-outline"
-                  size={36}
-                  color="#16a34a"
-                />
-              </View>
-              <Text style={s.emptyText}>All clear! No tasks assigned.</Text>
-            </View>
-          ) : (
-            allTasks.map((c) => renderTaskCard(c))
-          )}
-        </ScrollView>
-      )}
-
-      {activeTab === "lostfound" && (
-        <View style={{ flex: 1 }}>
-          <View style={s.lfPageHeader}>
-            <TouchableOpacity
-              onPress={() => setActiveTab("tasks")}
-              style={s.lfPageBackBtn}
-            >
-              <Ionicons name="arrow-back" size={18} color="#0f172a" />
-            </TouchableOpacity>
-            <Text style={s.lfPageTitle}>Lost & Found</Text>
-            <TouchableOpacity
-              style={s.lfPageAddBtn}
-              onPress={() => router.push("/post-found-item" as any)}
-            >
-              <Ionicons name="add" size={22} color="#fff" />
-            </TouchableOpacity>
-          </View>
-          <View style={s.lfSegmentRow}>
-            {(["feed", "myposts", "claims"] as const).map((tab) => (
-              <TouchableOpacity
-                key={tab}
-                style={[s.lfSegBtn, lostFoundTab === tab && s.lfSegBtnActive]}
-                onPress={() => setLostFoundTab(tab)}
-              >
-                <Text
-                  style={[
-                    s.lfSegBtnText,
-                    lostFoundTab === tab && s.lfSegBtnTextActive,
-                  ]}
-                >
-                  {tab === "feed"
-                    ? "All Items"
-                    : tab === "myposts"
-                      ? "My Posts"
-                      : "Claims"}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        {activeTab === "tasks" && (
           <ScrollView
+            style={s.tabScroll}
             contentContainerStyle={[
-              s.lfContainer,
+              s.tabContainer,
               { paddingBottom: bottomNavHeight + 20 },
             ]}
-            showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -1958,624 +2080,1198 @@ setRefreshing(false);
               />
             }
           >
-            {lostFoundTab === "feed" &&
-              (feedItems.length === 0 ? (
-                <View style={s.lfEmptyState}>
-                  <View style={s.lfEmptyIconWrap}>
-                    <Ionicons name="search-outline" size={36} color="#16a34a" />
-                  </View>
-                  <Text style={s.lfEmptyTitle}>No items posted yet</Text>
-                  <TouchableOpacity
-                    style={s.lfPostBtn}
-                    onPress={() => router.push("/post-found-item" as any)}
-                  >
-                    <Text style={s.lfPostBtnText}>Post Found Item</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                feedItems.map(renderLostFoundCard)
-              ))}
-            {lostFoundTab === "myposts" &&
-              (myPosts.length === 0 ? (
-                <View style={s.lfEmptyState}>
-                  <View style={s.lfEmptyIconWrap}>
-                    <Ionicons name="cube-outline" size={36} color="#16a34a" />
-                  </View>
-                  <Text style={s.lfEmptyTitle}>No posts yet</Text>
-                  <TouchableOpacity
-                    style={s.lfPostBtn}
-                    onPress={() => router.push("/post-found-item" as any)}
-                  >
-                    <Text style={s.lfPostBtnText}>Post Found Item</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                myPosts.map(renderLostFoundCard)
-              ))}
-            {lostFoundTab === "claims" &&
-              (claimItems.length === 0 ? (
-                <View style={s.lfEmptyState}>
-                  <View style={s.lfEmptyIconWrap}>
-                    <Ionicons
-                      name="hand-left-outline"
-                      size={36}
-                      color="#16a34a"
-                    />
-                  </View>
-                  <Text style={s.lfEmptyTitle}>No claims yet</Text>
-                </View>
-              ) : (
-                claimItems.map((item) => (
-                  <View key={item.id} style={s.lfCard}>
-                    <View style={s.lfCardHeader}>
-                      <View
-                        style={[
-                          s.lfAvatar,
-                          { width: 42, height: 42, borderRadius: 12 },
-                        ]}
-                      >
-                        <Ionicons
-                          name="checkmark-circle-outline"
-                          size={20}
-                          color="#16a34a"
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.lfTitle}>{item.itemName}</Text>
-                        <Text style={s.lfDesc}>
-                          <Text style={{ color: "#94a3b8" }}>Handed by </Text>
-                          <Text style={{ fontWeight: "700", color: "#0f172a" }}>
-                            {item.handedByName}
-                          </Text>
-                          {item.handedByRole ? (
-                            <Text style={{ color: "#64748b" }}>
-                              {" "}
-                              ({item.handedByRole})
-                            </Text>
-                          ) : null}
-                        </Text>
-                        <Text style={s.lfDesc}>
-                          <Text style={{ color: "#94a3b8" }}>
-                            Collected by{" "}
-                          </Text>
-                          <Text style={{ fontWeight: "700", color: "#0f172a" }}>
-                            {item.handedToName}
-                          </Text>
-                        </Text>
-                        {item.roomNumber ? (
-                          <View style={s.lfMetaRow}>
-                            <Ionicons
-                              name="location-outline"
-                              size={12}
-                              color="#64748b"
-                            />
-                            <Text style={s.lfLocationText}>
-                              Room {item.roomNumber}
-                              {item.roomLabel ? ` — ${item.roomLabel}` : ""}
-                            </Text>
-                          </View>
-                        ) : null}
-                        {item.collectLocation ? (
-                          <View style={s.lfMetaRow}>
-                            <Ionicons
-                              name="pin-outline"
-                              size={12}
-                              color="#16a34a"
-                            />
-                            <Text style={s.lfCollectText}>
-                              Handed at: {item.collectLocation}
-                            </Text>
-                          </View>
-                        ) : null}
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            color: "#94a3b8",
-                            marginTop: 4,
-                          }}
-                        >
-                          {formatDate(item.handedAt)}
-                        </Text>
-                      </View>
-                      {item.photoUrl ? (
-                        <TouchableOpacity
-                          onPress={() => setImageViewerUri(item.photoUrl!)}
-                          activeOpacity={0.9}
-                        >
-                          <Image
-                            source={{ uri: item.photoUrl }}
-                            style={{ width: 56, height: 56, borderRadius: 10 }}
-                            resizeMode="cover"
-                          />
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                  </View>
-                ))
-              ))}
-          </ScrollView>
-        </View>
-      )}
-
-      {activeTab === "history" && (
-        <ScrollView
-          style={s.tabScroll}
-          contentContainerStyle={[
-            s.tabContainer,
-            { paddingBottom: bottomNavHeight + 20 },
-          ]}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={["#16a34a"]}
-            />
-          }
-        >
-          <View style={s.subHeader}>
-            <Text style={s.subHeaderTitle}>History</Text>
-          </View>
-          <View style={s.historyStats}>
-            <View style={s.historyItem}>
-              <Text style={[s.historyNum, { color: "#16a34a" }]}>
-                {completed.length}
-              </Text>
-              <Text style={s.historyLabel}>Completed</Text>
-            </View>
-            <View style={s.historyDivider} />
-            <View style={s.historyItem}>
-              <Text style={[s.historyNum, { color: "#dc2626" }]}>
-                {rejected.length}
-              </Text>
-              <Text style={s.historyLabel}>Rejected</Text>
-            </View>
-          </View>
-          {completed.length === 0 && rejected.length === 0 && (
-            <View style={s.emptyState}>
-              <View style={s.emptyIconWrap}>
-                <Ionicons name="time-outline" size={36} color="#94a3b8" />
-              </View>
-              <Text style={s.emptyText}>No history yet</Text>
-            </View>
-          )}
-          {completed.length > 0 && (
-            <>
-              <View style={s.historySection}>
-                <Ionicons
-                  name="checkmark-circle"
-                  size={14}
-                  color="#16a34a"
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={s.historySectionTitle}>Completed</Text>
-              </View>
-              {completed.map((c) => renderTaskCard(c))}
-            </>
-          )}
-          {rejected.length > 0 && (
-            <>
-              <View style={s.historySection}>
-                <Ionicons
-                  name="close-circle"
-                  size={14}
-                  color="#dc2626"
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={[s.historySectionTitle, { color: "#dc2626" }]}>
-                  Rejected by You
-                </Text>
-              </View>
-              {rejected.map((c) => renderRejectedCard(c))}
-            </>
-          )}
-        </ScrollView>
-      )}
-
-      {activeTab === "profile" && (
-        <>
-          {profileScreen === "main" && renderProfileMain()}
-          {profileScreen === "personalInfo" && renderPersonalInfo()}
-          {profileScreen === "changePassword" && renderChangePassword()}
-          {profileScreen === "reportSecurity" && renderReportSecurity()}
-        </>
-      )}
-
-      <View
-        style={[
-          s.bottomBar,
-          { paddingBottom: insets.bottom + 10, height: bottomNavHeight },
-        ]}
-      >
-        {BOTTOM_TABS.map((tab) => {
-          const isActive = activeTab === tab.key;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              style={s.bottomTab}
-              onPress={() => {
-                setActiveTab(tab.key);
-                setProfileScreen("main");
-              }}
-            >
-              <View style={{ position: "relative" }}>
-                <Ionicons
-                  name={isActive ? tab.iconActive : tab.iconName}
-                  size={22}
-                  color={isActive ? "#16a34a" : "#94a3b8"}
-                />
-                {tab.badge != null && tab.badge > 0 && (
-                  <View style={s.badgeDot}>
-                    <Text style={s.badgeDotText}>{tab.badge}</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={[s.bottomLabel, isActive && s.bottomLabelActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      <Modal
-        visible={detailVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setDetailVisible(false)}
-      >
-        <View style={s.modalRoot}>
-          <View style={s.modalTopBar}>
-            <TouchableOpacity
-              onPress={() => setDetailVisible(false)}
-              style={s.modalBackBtn}
-            >
-              <Ionicons name="arrow-back" size={18} color="#0f172a" />
-            </TouchableOpacity>
-            <Text style={s.modalTopTitle}>Task Details</Text>
-            <View style={{ width: 36 }} />
-          </View>
-          {selectedComplaint && (
-            <ScrollView contentContainerStyle={s.modalContent}>
-              {selectedComplaint.photoUrl ? (
-                <TouchableOpacity
-                  onPress={() => setImageViewerUri(selectedComplaint.photoUrl!)}
-                  activeOpacity={0.9}
-                >
+            <View style={s.topBar}>
+              <View style={s.topBarLeft}>
+                <View style={s.topBarLogoCircle}>
                   <Image
-                    source={{ uri: selectedComplaint.photoUrl }}
-                    style={s.modalPhoto}
-                    resizeMode="cover"
+                    source={require("../assets/images/logo.png")}
+                    style={s.topBarLogoImg}
+                    resizeMode="contain"
                   />
+                </View>
+                <Text style={s.topBarTitle}>UniFiX</Text>
+              </View>
+              <View style={s.topBarRight}>
+                <TouchableOpacity onPress={() => setActiveTab("profile")}>
+                  {staffData?.photoUrl ? (
+                    <Image
+                      source={{ uri: staffData.photoUrl }}
+                      style={s.topBarAvatar}
+                    />
+                  ) : (
+                    <View style={s.topBarAvatarEmpty}>
+                      <Text style={s.topBarAvatarText}>
+                        {staffData?.fullName?.[0]?.toUpperCase() || "S"}
+                      </Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
-              ) : null}
-              <Text style={s.modalIssueTitle}>
-                {selectedComplaint.subIssue ||
-                  selectedComplaint.customIssue ||
-                  "Issue"}
-              </Text>
+              </View>
+            </View>
+            {isOffline && (
               <View
-                style={[
-                  s.statusPill,
-                  {
-                    backgroundColor: (
-                      STATUS_CONFIG[selectedComplaint.status] ||
-                      STATUS_CONFIG.pending
-                    ).bg,
-                    alignSelf: "flex-start",
-                    marginBottom: 16,
-                  },
-                ]}
+                style={{
+                  backgroundColor: "#f59e0b",
+                  padding: 8,
+                  alignItems: "center",
+                  borderRadius: 8,
+                  marginBottom: 12,
+                }}
               >
                 <Text
+                  style={{ color: "#fff", fontSize: 12, fontWeight: "600" }}
+                >
+                  {"You're offline, showing cached data"}
+                </Text>
+              </View>
+            )}
+            <View style={s.welcomeBanner}>
+              <Text style={s.welcomeLabel}>STAFF DASHBOARD</Text>
+              <Text style={s.welcomeName}>Welcome, {firstName}</Text>
+              <View style={s.welcomeDateRow}>
+                <Ionicons name="calendar-outline" size={13} color="#64748b" />
+                <Text style={s.welcomeDate}>{today}</Text>
+              </View>
+            </View>
+            <View style={s.statsGrid}>
+              {STAT_ITEMS.map((stat) => (
+                <View key={stat.label} style={s.statCard}>
+                  <View
+                    style={[s.statIconWrap, { backgroundColor: stat.iconBg }]}
+                  >
+                    <Ionicons
+                      name={stat.iconName}
+                      size={20}
+                      color={stat.iconColor}
+                    />
+                  </View>
+                  <Text style={s.statLabel}>{stat.label}</Text>
+                  <Text style={s.statValue}>{stat.value}</Text>
+                  <Text style={[s.statSub, { color: stat.subColor }]}>
+                    {stat.sub}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <View style={s.sectionHeader}>
+              <Text style={s.sectionTitle}>Active Tasks</Text>
+            </View>
+            {allTasks.length === 0 ? (
+              <View style={s.emptyState}>
+                <View style={s.emptyIconWrap}>
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={36}
+                    color="#16a34a"
+                  />
+                </View>
+                <Text style={s.emptyText}>All clear! No tasks assigned.</Text>
+              </View>
+            ) : (
+              allTasks.map((c) => renderTaskCard(c))
+            )}
+          </ScrollView>
+        )}
+
+        {activeTab === "lostfound" && (
+          <View style={{ flex: 1 }}>
+            <View style={s.lfPageHeader}>
+              <TouchableOpacity
+                onPress={() => setActiveTab("tasks")}
+                style={s.lfPageBackBtn}
+              >
+                <Ionicons name="arrow-back" size={18} color="#0f172a" />
+              </TouchableOpacity>
+              <Text style={s.lfPageTitle}>Lost & Found</Text>
+              <TouchableOpacity
+                style={s.lfPageAddBtn}
+                onPress={() => setShowPostFoundModal(true)}
+              >
+                <Ionicons name="add" size={22} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            <View style={s.lfSegmentRow}>
+              {(["feed", "myposts", "claims"] as const).map((tab) => (
+                <TouchableOpacity
+                  key={tab}
+                  style={[s.lfSegBtn, lostFoundTab === tab && s.lfSegBtnActive]}
+                  onPress={() => setLostFoundTab(tab)}
+                >
+                  <Text
+                    style={[
+                      s.lfSegBtnText,
+                      lostFoundTab === tab && s.lfSegBtnTextActive,
+                    ]}
+                  >
+                    {tab === "feed"
+                      ? "All Items"
+                      : tab === "myposts"
+                        ? "My Posts"
+                        : "Claims"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <ScrollView
+              contentContainerStyle={[
+                s.lfContainer,
+                { paddingBottom: bottomNavHeight + 20 },
+              ]}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={["#16a34a"]}
+                />
+              }
+            >
+              {lostFoundTab === "feed" &&
+                (feedItems.length === 0 ? (
+                  <View style={s.lfEmptyState}>
+                    <View style={s.lfEmptyIconWrap}>
+                      <Ionicons
+                        name="search-outline"
+                        size={36}
+                        color="#16a34a"
+                      />
+                    </View>
+                    <Text style={s.lfEmptyTitle}>No items posted yet</Text>
+                    <TouchableOpacity
+                      style={s.lfPostBtn}
+                      onPress={() => setShowPostFoundModal(true)}
+                    >
+                      <Text style={s.lfPostBtnText}>Post Found Item</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  feedItems.map(renderLostFoundCard)
+                ))}
+              {lostFoundTab === "myposts" &&
+                (myPosts.length === 0 ? (
+                  <View style={s.lfEmptyState}>
+                    <View style={s.lfEmptyIconWrap}>
+                      <Ionicons name="cube-outline" size={36} color="#16a34a" />
+                    </View>
+                    <Text style={s.lfEmptyTitle}>No posts yet</Text>
+                    <TouchableOpacity
+                      style={s.lfPostBtn}
+                      onPress={() => setShowPostFoundModal(true)}
+                    >
+                      <Text style={s.lfPostBtnText}>Post Found Item</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  myPosts.map(renderLostFoundCard)
+                ))}
+              {lostFoundTab === "claims" &&
+                (claimItems.length === 0 ? (
+                  <View style={s.lfEmptyState}>
+                    <View style={s.lfEmptyIconWrap}>
+                      <Ionicons
+                        name="hand-left-outline"
+                        size={36}
+                        color="#16a34a"
+                      />
+                    </View>
+                    <Text style={s.lfEmptyTitle}>No claims yet</Text>
+                  </View>
+                ) : (
+                  claimItems.map((item) => (
+                    <View key={item.id} style={s.lfCard}>
+                      <View style={s.lfCardHeader}>
+                        <View
+                          style={[
+                            s.lfAvatar,
+                            { width: 42, height: 42, borderRadius: 12 },
+                          ]}
+                        >
+                          <Ionicons
+                            name="checkmark-circle-outline"
+                            size={20}
+                            color="#16a34a"
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.lfTitle}>{item.itemName}</Text>
+                          <Text style={s.lfDesc}>
+                            <Text style={{ color: "#94a3b8" }}>Handed by </Text>
+                            <Text
+                              style={{ fontWeight: "700", color: "#0f172a" }}
+                            >
+                              {item.handedByName}
+                            </Text>
+                            {item.handedByRole ? (
+                              <Text style={{ color: "#64748b" }}>
+                                {" "}
+                                ({item.handedByRole})
+                              </Text>
+                            ) : null}
+                          </Text>
+                          <Text style={s.lfDesc}>
+                            <Text style={{ color: "#94a3b8" }}>
+                              Collected by{" "}
+                            </Text>
+                            <Text
+                              style={{ fontWeight: "700", color: "#0f172a" }}
+                            >
+                              {item.handedToName}
+                            </Text>
+                          </Text>
+                          {item.roomNumber ? (
+                            <View style={s.lfMetaRow}>
+                              <Ionicons
+                                name="location-outline"
+                                size={12}
+                                color="#64748b"
+                              />
+                              <Text style={s.lfLocationText}>
+                                Room {item.roomNumber}
+                                {item.roomLabel ? ` , ${item.roomLabel}` : ""}
+                              </Text>
+                            </View>
+                          ) : null}
+                          {item.collectLocation ? (
+                            <View style={s.lfMetaRow}>
+                              <Ionicons
+                                name="pin-outline"
+                                size={12}
+                                color="#16a34a"
+                              />
+                              <Text style={s.lfCollectText}>
+                                Handed at: {item.collectLocation}
+                              </Text>
+                            </View>
+                          ) : null}
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              color: "#94a3b8",
+                              marginTop: 4,
+                            }}
+                          >
+                            {formatDate(item.handedAt)}
+                          </Text>
+                        </View>
+                        {item.photoUrl ? (
+                          <TouchableOpacity
+                            onPress={() => setImageViewerUri(item.photoUrl!)}
+                            activeOpacity={0.9}
+                          >
+                            <Image
+                              source={{ uri: item.photoUrl }}
+                              style={{
+                                width: 56,
+                                height: 56,
+                                borderRadius: 10,
+                              }}
+                              resizeMode="cover"
+                            />
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    </View>
+                  ))
+                ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {activeTab === "history" && (
+          <ScrollView
+            style={s.tabScroll}
+            contentContainerStyle={[
+              s.tabContainer,
+              { paddingBottom: bottomNavHeight + 20 },
+            ]}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={["#16a34a"]}
+              />
+            }
+          >
+            <View style={s.subHeader}>
+              <Text style={s.subHeaderTitle}>History</Text>
+            </View>
+            <View style={s.historyStats}>
+              <View style={s.historyItem}>
+                <Text style={[s.historyNum, { color: "#16a34a" }]}>
+                  {completed.length}
+                </Text>
+                <Text style={s.historyLabel}>Completed</Text>
+              </View>
+              <View style={s.historyDivider} />
+              <View style={s.historyItem}>
+                <Text style={[s.historyNum, { color: "#dc2626" }]}>
+                  {rejected.length}
+                </Text>
+                <Text style={s.historyLabel}>Rejected</Text>
+              </View>
+            </View>
+            {completed.length === 0 && rejected.length === 0 && (
+              <View style={s.emptyState}>
+                <View style={s.emptyIconWrap}>
+                  <Ionicons name="time-outline" size={36} color="#94a3b8" />
+                </View>
+                <Text style={s.emptyText}>No history yet</Text>
+              </View>
+            )}
+            {completed.length > 0 && (
+              <>
+                <View style={s.historySection}>
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={14}
+                    color="#16a34a"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={s.historySectionTitle}>Completed</Text>
+                </View>
+                {completed.map((c) => renderTaskCard(c))}
+              </>
+            )}
+            {rejected.length > 0 && (
+              <>
+                <View style={s.historySection}>
+                  <Ionicons
+                    name="close-circle"
+                    size={14}
+                    color="#dc2626"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={[s.historySectionTitle, { color: "#dc2626" }]}>
+                    Rejected by You
+                  </Text>
+                </View>
+                {rejected.map((c) => renderRejectedCard(c))}
+              </>
+            )}
+          </ScrollView>
+        )}
+
+        {activeTab === "profile" && (
+          <>
+            {profileScreen === "main" && renderProfileMain()}
+            {profileScreen === "personalInfo" && renderPersonalInfo()}
+            {profileScreen === "changePassword" && renderChangePassword()}
+            {profileScreen === "reportSecurity" && renderReportSecurity()}
+          </>
+        )}
+
+        <View
+          style={[
+            s.bottomBar,
+            { paddingBottom: insets.bottom + 10, height: bottomNavHeight },
+          ]}
+        >
+          {BOTTOM_TABS.map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={s.bottomTab}
+                onPress={() => {
+                  setActiveTab(tab.key);
+                  setProfileScreen("main");
+                }}
+              >
+                <View style={{ position: "relative" }}>
+                  <Ionicons
+                    name={isActive ? tab.iconActive : tab.iconName}
+                    size={22}
+                    color={isActive ? "#16a34a" : "#94a3b8"}
+                  />
+                  {tab.badge != null && tab.badge > 0 && (
+                    <View style={s.badgeDot}>
+                      <Text style={s.badgeDotText}>{tab.badge}</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={[s.bottomLabel, isActive && s.bottomLabelActive]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <Modal
+          visible={detailVisible}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setDetailVisible(false)}
+        >
+          <View style={s.modalRoot}>
+            <View style={s.modalTopBar}>
+              <TouchableOpacity
+                onPress={() => setDetailVisible(false)}
+                style={s.modalBackBtn}
+              >
+                <Ionicons name="arrow-back" size={18} color="#0f172a" />
+              </TouchableOpacity>
+              <Text style={s.modalTopTitle}>Task Details</Text>
+              <View style={{ width: 36 }} />
+            </View>
+            {selectedComplaint && (
+              <ScrollView contentContainerStyle={s.modalContent}>
+                {selectedComplaint.photoUrl ? (
+                  <TouchableOpacity
+                    onPress={() =>
+                      setImageViewerUri(selectedComplaint.photoUrl!)
+                    }
+                    activeOpacity={0.9}
+                  >
+                    <Image
+                      source={{ uri: selectedComplaint.photoUrl }}
+                      style={s.modalPhoto}
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+                ) : null}
+                <Text style={s.modalIssueTitle}>
+                  {selectedComplaint.subIssue ||
+                    selectedComplaint.customIssue ||
+                    "Issue"}
+                </Text>
+                <View
                   style={[
-                    s.statusPillText,
+                    s.statusPill,
                     {
-                      color: (
+                      backgroundColor: (
                         STATUS_CONFIG[selectedComplaint.status] ||
                         STATUS_CONFIG.pending
-                      ).color,
+                      ).bg,
+                      alignSelf: "flex-start",
+                      marginBottom: 16,
                     },
                   ]}
                 >
-                  {
-                    (
-                      STATUS_CONFIG[selectedComplaint.status] ||
-                      STATUS_CONFIG.pending
-                    ).label
-                  }
-                </Text>
-              </View>
-              <Text style={s.modalSectionLabel}>REPORTER</Text>
-              <View style={s.reporterCard}>
-                <View style={s.reporterAvatar}>
-                  <Text style={s.reporterAvatarText}>
-                    {selectedComplaint.submittedByName?.[0]?.toUpperCase()}
+                  <Text
+                    style={[
+                      s.statusPillText,
+                      {
+                        color: (
+                          STATUS_CONFIG[selectedComplaint.status] ||
+                          STATUS_CONFIG.pending
+                        ).color,
+                      },
+                    ]}
+                  >
+                    {
+                      (
+                        STATUS_CONFIG[selectedComplaint.status] ||
+                        STATUS_CONFIG.pending
+                      ).label
+                    }
                   </Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.reporterName}>
-                    {selectedComplaint.submittedByName}
-                  </Text>
-                  {selectedComplaint.submittedByPhone ? (
-                    <Text style={s.reporterPhone}>
-                      {selectedComplaint.submittedByPhone}
-                    </Text>
-                  ) : null}
-                </View>
-                <TouchableOpacity
-                  style={s.callBtn}
-                  onPress={() => handleCall(selectedComplaint.submittedByPhone)}
-                >
-                  <Ionicons name="call-outline" size={20} color="#16a34a" />
-                </TouchableOpacity>
-              </View>
-              <Text style={s.modalSectionLabel}>LOCATION</Text>
-              <View style={s.locationCard}>
-                <View style={s.locationCardIcon}>
-                  <Ionicons name="location-outline" size={20} color="#16a34a" />
-                </View>
-                <View>
-                  <Text style={s.locationCardMain}>
-                    {selectedComplaint.building || "Campus"}
-                  </Text>
-                  <Text style={s.locationCardSub}>
-                    {selectedComplaint.roomDetail || "—"}
-                  </Text>
-                </View>
-              </View>
-              {selectedComplaint.description ? (
-                <>
-                  <Text style={s.modalSectionLabel}>DESCRIPTION</Text>
-                  <View style={s.descCard}>
-                    <Text style={s.descText}>
-                      {selectedComplaint.description}
+                <Text style={s.modalSectionLabel}>REPORTER</Text>
+                <View style={s.reporterCard}>
+                  <View style={s.reporterAvatar}>
+                    <Text style={s.reporterAvatarText}>
+                      {selectedComplaint.submittedByName?.[0]?.toUpperCase()}
                     </Text>
                   </View>
-                </>
-              ) : null}
-              <View style={s.modalActions}>
-                {selectedComplaint.status === "pending" && (
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.reporterName}>
+                      {selectedComplaint.submittedByName}
+                    </Text>
+                    {selectedComplaint.submittedByPhone ? (
+                      <Text style={s.reporterPhone}>
+                        {selectedComplaint.submittedByPhone}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <TouchableOpacity
+                    style={s.callBtn}
+                    onPress={() =>
+                      handleCall(selectedComplaint.submittedByPhone)
+                    }
+                  >
+                    <Ionicons name="call-outline" size={20} color="#16a34a" />
+                  </TouchableOpacity>
+                </View>
+                <Text style={s.modalSectionLabel}>LOCATION</Text>
+                <View style={s.locationCard}>
+                  <View style={s.locationCardIcon}>
+                    <Ionicons
+                      name="location-outline"
+                      size={20}
+                      color="#16a34a"
+                    />
+                  </View>
+                  <View>
+                    <Text style={s.locationCardMain}>
+                      {selectedComplaint.building || "Campus"}
+                    </Text>
+                    <Text style={s.locationCardSub}>
+                      {selectedComplaint.roomDetail || "—"}
+                    </Text>
+                  </View>
+                </View>
+                {selectedComplaint.description ? (
                   <>
+                    <Text style={s.modalSectionLabel}>DESCRIPTION</Text>
+                    <View style={s.descCard}>
+                      <Text style={s.descText}>
+                        {selectedComplaint.description}
+                      </Text>
+                    </View>
+                  </>
+                ) : null}
+                <View style={s.modalActions}>
+                  {selectedComplaint.status === "pending" && (
+                    <>
+                      <TouchableOpacity
+                        style={s.acceptActionBtn}
+                        onPress={() => handleAccept(selectedComplaint.id)}
+                        disabled={!!actionLoading}
+                      >
+                        {actionLoading === selectedComplaint.id ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <Text style={s.acceptActionBtnText}>
+                            Accept Request
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={s.rejectActionBtn}
+                        onPress={() => openRejectModal(selectedComplaint.id)}
+                        disabled={!!actionLoading}
+                      >
+                        <Text style={s.rejectActionText}>Reject</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                  {selectedComplaint.status === "assigned" && (
+                    <TouchableOpacity
+                      style={s.inProgressActionBtn}
+                      onPress={() =>
+                        handleUpdateStatus(selectedComplaint.id, "in_progress")
+                      }
+                      disabled={!!actionLoading}
+                    >
+                      {actionLoading === selectedComplaint.id ? (
+                        <ActivityIndicator color="#7c3aed" />
+                      ) : (
+                        <Text style={s.inProgressText}>
+                          Mark as In Progress
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                  {selectedComplaint.status === "in_progress" && (
                     <TouchableOpacity
                       style={s.acceptActionBtn}
-                      onPress={() => handleAccept(selectedComplaint.id)}
+                      onPress={() =>
+                        handleUpdateStatus(selectedComplaint.id, "completed")
+                      }
                       disabled={!!actionLoading}
                     >
                       {actionLoading === selectedComplaint.id ? (
                         <ActivityIndicator color="#fff" />
                       ) : (
                         <Text style={s.acceptActionBtnText}>
-                          Accept Request
+                          Mark as Completed
                         </Text>
                       )}
                     </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={s.rejectActionBtn}
-                      onPress={() => openRejectModal(selectedComplaint.id)}
-                      disabled={!!actionLoading}
-                    >
-                      <Text style={s.rejectActionText}>Reject</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-                {selectedComplaint.status === "assigned" && (
-                  <TouchableOpacity
-                    style={s.inProgressActionBtn}
-                    onPress={() =>
-                      handleUpdateStatus(selectedComplaint.id, "in_progress")
-                    }
-                    disabled={!!actionLoading}
-                  >
-                    {actionLoading === selectedComplaint.id ? (
-                      <ActivityIndicator color="#7c3aed" />
-                    ) : (
-                      <Text style={s.inProgressText}>Mark as In Progress</Text>
-                    )}
-                  </TouchableOpacity>
-                )}
-                {selectedComplaint.status === "in_progress" && (
-                  <TouchableOpacity
-                    style={s.acceptActionBtn}
-                    onPress={() =>
-                      handleUpdateStatus(selectedComplaint.id, "completed")
-                    }
-                    disabled={!!actionLoading}
-                  >
-                    {actionLoading === selectedComplaint.id ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={s.acceptActionBtnText}>
-                        Mark as Completed
+                  )}
+                  {(selectedComplaint.status === "completed" ||
+                    selectedComplaint.status === "rejected") && (
+                    <View style={s.resolvedBanner}>
+                      <Text style={s.resolvedBannerText}>
+                        {selectedComplaint.status === "completed"
+                          ? (selectedComplaint as any).flagResolvedBy ===
+                            "admin"
+                            ? "Resolved by Admin"
+                            : "Task completed"
+                          : "Task rejected"}
                       </Text>
-                    )}
-                  </TouchableOpacity>
-                )}
-         {(selectedComplaint.status === "completed" ||
-  selectedComplaint.status === "rejected") && (
-  <View style={s.resolvedBanner}>
-    <Text style={s.resolvedBannerText}>
-      {selectedComplaint.status === "completed"
-        ? (selectedComplaint as any).flagResolvedBy === "admin"
-          ? "Resolved by Admin"
-          : "Task completed"
-        : "Task rejected"}
-    </Text>
-  </View>
-)}
-              </View>
-            </ScrollView>
-          )}
-        </View>
-      </Modal>
-
-      <Modal
-        visible={rejectVisible}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setRejectVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={s.sheetOverlay}
-        >
-          <View style={[s.sheet, { paddingBottom: insets.bottom + 24 }]}>
-            <View style={s.sheetHandle} />
-            <Text style={s.sheetTitle}>Reject Complaint</Text>
-            <Text style={s.sheetSub}>
-              Please provide a reason for rejection
-            </Text>
-            <TextInput
-              style={s.sheetInput}
-              placeholder="Enter reason here..."
-              placeholderTextColor="#9ca3af"
-              multiline
-              numberOfLines={4}
-              value={rejectReason}
-              onChangeText={setRejectReason}
-              textAlignVertical="top"
-            />
-            <View style={s.sheetBtnRow}>
-              <TouchableOpacity
-                style={s.sheetCancelBtn}
-                onPress={() => {
-                  setRejectVisible(false);
-                  setDetailVisible(true);
-                }}
-              >
-                <Text style={s.sheetCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.sheetRejectBtn, !!actionLoading && { opacity: 0.55 }]}
-                onPress={handleReject}
-                disabled={!!actionLoading}
-              >
-                {actionLoading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={s.sheetRejectText}>Confirm Reject</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+                    </View>
+                  )}
+                </View>
+              </ScrollView>
+            )}
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        </Modal>
 
-      <Modal
-        visible={!!handoverItem}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setHandoverItem(null)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={s.sheetOverlay}
+        <Modal
+          visible={rejectVisible}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setRejectVisible(false)}
         >
-          <View style={[s.sheet, { paddingBottom: insets.bottom + 24 }]}>
-            <View style={s.sheetHandle} />
-            <Text style={s.sheetTitle}>Mark as Handed Over</Text>
-            <Text style={s.sheetSub}>
-              Enter the name of the person who collected{" "}
-              {handoverItem?.itemName}
-            </Text>
-            <TextInput
-              style={[
-                s.sheetInput,
-                { minHeight: 50, textAlignVertical: "auto" },
-              ]}
-              placeholder="e.g. Shaho"
-              placeholderTextColor="#9ca3af"
-              value={handedToName}
-              onChangeText={(t) => {
-                setHandedToName(t);
-                setHandoverError("");
-              }}
-              autoCapitalize="words"
-            />
-            {handoverError ? (
-              <Text
-                style={{
-                  color: "#dc2626",
-                  fontSize: 13,
-                  marginBottom: 8,
-                  fontWeight: "500",
-                }}
-              >
-                {handoverError}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={s.sheetOverlay}
+          >
+            <View style={[s.sheet, { paddingBottom: insets.bottom + 24 }]}>
+              <View style={s.sheetHandle} />
+              <Text style={s.sheetTitle}>Reject Complaint</Text>
+              <Text style={s.sheetSub}>
+                Please provide a reason for rejection
               </Text>
-            ) : null}
-            <View style={s.sheetBtnRow}>
-              <TouchableOpacity
-                style={s.sheetCancelBtn}
-                onPress={() => setHandoverItem(null)}
-                disabled={handoverLoading}
-              >
-                <Text style={s.sheetCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  s.acceptActionBtn,
-                  { flex: 1 },
-                  handoverLoading && { opacity: 0.55 },
-                ]}
-                onPress={handleHandover}
-                disabled={handoverLoading}
-              >
-                {handoverLoading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={s.acceptActionBtnText}>Confirm</Text>
-                )}
-              </TouchableOpacity>
+              <TextInput
+                style={s.sheetInput}
+                placeholder="Enter reason here..."
+                placeholderTextColor="#9ca3af"
+                multiline
+                numberOfLines={4}
+                value={rejectReason}
+                onChangeText={setRejectReason}
+                textAlignVertical="top"
+              />
+              <View style={s.sheetBtnRow}>
+                <TouchableOpacity
+                  style={s.sheetCancelBtn}
+                  onPress={() => {
+                    setRejectVisible(false);
+                    setDetailVisible(true);
+                  }}
+                >
+                  <Text style={s.sheetCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    s.sheetRejectBtn,
+                    !!actionLoading && { opacity: 0.55 },
+                  ]}
+                  onPress={handleReject}
+                  disabled={!!actionLoading}
+                >
+                  {actionLoading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={s.sheetRejectText}>Confirm Reject</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          </KeyboardAvoidingView>
+        </Modal>
 
-      {imageViewerUri && (
-        <ImageViewer
-          uri={imageViewerUri}
-          visible={!!imageViewerUri}
-          onClose={() => setImageViewerUri(null)}
-        />
-      )}
-
-      {toast && (
-        <Animated.View
-          style={[
-            s.toast,
-            toast.type === "success" && s.toastSuccess,
-            toast.type === "error" && s.toastError,
-            toast.type === "info" && s.toastInfo,
-            {
-              transform: [
-                {
-                  translateY: toastAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-80, 0],
-                  }),
-                },
-              ],
-              opacity: toastAnim,
-            },
-          ]}
-          pointerEvents="none"
+        <Modal
+          visible={!!handoverItem}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setHandoverItem(null)}
         >
-          <Ionicons
-            name={
-              toast.type === "success"
-                ? "checkmark-circle"
-                : toast.type === "error"
-                  ? "close-circle"
-                  : "information-circle"
-            }
-            size={18}
-            color="#fff"
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={s.sheetOverlay}
+          >
+            <View style={[s.sheet, { paddingBottom: insets.bottom + 24 }]}>
+              <View style={s.sheetHandle} />
+              <Text style={s.sheetTitle}>Mark as Handed Over</Text>
+              <Text style={s.sheetSub}>
+                Enter the name of the person who collected{" "}
+                {handoverItem?.itemName}
+              </Text>
+              <TextInput
+                style={[
+                  s.sheetInput,
+                  { minHeight: 50, textAlignVertical: "auto" },
+                ]}
+                placeholder="e.g. Shaho"
+                placeholderTextColor="#9ca3af"
+                value={handedToName}
+                onChangeText={(t) => {
+                  setHandedToName(t);
+                  setHandoverError("");
+                }}
+                autoCapitalize="words"
+              />
+              {handoverError ? (
+                <Text
+                  style={{
+                    color: "#dc2626",
+                    fontSize: 13,
+                    marginBottom: 8,
+                    fontWeight: "500",
+                  }}
+                >
+                  {handoverError}
+                </Text>
+              ) : null}
+              <View style={s.sheetBtnRow}>
+                <TouchableOpacity
+                  style={s.sheetCancelBtn}
+                  onPress={() => setHandoverItem(null)}
+                  disabled={handoverLoading}
+                >
+                  <Text style={s.sheetCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    s.acceptActionBtn,
+                    { flex: 1 },
+                    handoverLoading && { opacity: 0.55 },
+                  ]}
+                  onPress={handleHandover}
+                  disabled={handoverLoading}
+                >
+                  {handoverLoading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={s.acceptActionBtnText}>Confirm</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+
+        <Modal
+          visible={showPostFoundModal}
+          animationType="slide"
+          onRequestClose={() => {
+            setShowPostFoundModal(false);
+            resetPostFoundForm();
+          }}
+        >
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          >
+            <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingTop: insets.top + 14,
+                  paddingHorizontal: 20,
+                  paddingBottom: 14,
+                  backgroundColor: "#ffffff",
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#f1f5f9",
+                }}
+              >
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowPostFoundModal(false);
+                    resetPostFoundForm();
+                  }}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: "#f1f5f9",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons name="arrow-back" size={18} color="#0f172a" />
+                </TouchableOpacity>
+                <Text
+                  style={{ fontSize: 16, fontWeight: "800", color: "#0f172a" }}
+                >
+                  Post Found Item
+                </Text>
+                <View style={{ width: 36 }} />
+              </View>
+              <ScrollView
+                contentContainerStyle={{
+                  padding: 16,
+                  gap: 14,
+                  paddingBottom: 48,
+                }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: "#f8fafc",
+                    borderRadius: 16,
+                    overflow: "hidden",
+                    minHeight: 160,
+                    borderWidth: 1.5,
+                    borderColor: "#e2e8f0",
+                    borderStyle: "dashed",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                  onPress={handlePostFoundPickPhoto}
+                  activeOpacity={0.85}
+                >
+                  {postFoundPhoto ? (
+                    <Image
+                      source={{ uri: postFoundPhoto.uri }}
+                      style={{ width: "100%", height: 220 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={{ padding: 24, alignItems: "center", gap: 8 }}>
+                      <Ionicons
+                        name="camera-outline"
+                        size={32}
+                        color="#94a3b8"
+                      />
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          color: "#64748b",
+                          fontWeight: "500",
+                        }}
+                      >
+                        Tap to add photo (optional)
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <View
+                  style={{
+                    backgroundColor: "#ffffff",
+                    borderRadius: 14,
+                    padding: 16,
+                    borderWidth: 1.5,
+                    borderColor: "#f1f5f9",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "600",
+                      color: "#374151",
+                      marginBottom: 8,
+                    }}
+                  >
+                    Item Name
+                  </Text>
+                  <TextInput
+                    style={{
+                      backgroundColor: "#f8fafc",
+                      borderRadius: 12,
+                      paddingHorizontal: 14,
+                      paddingVertical: 13,
+                      fontSize: 15,
+                      color: "#0f172a",
+                      borderWidth: 1.5,
+                      borderColor: "#e2e8f0",
+                      marginBottom: 14,
+                    }}
+                    placeholder="e.g. Black Leather Wallet"
+                    placeholderTextColor="#9ca3af"
+                    value={postFoundItemName}
+                    onChangeText={setPostFoundItemName}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "600",
+                      color: "#374151",
+                      marginBottom: 8,
+                    }}
+                  >
+                    Category
+                  </Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={{ marginBottom: 14 }}
+                  >
+                    {LF_CATEGORIES_FOUND.map((c) => (
+                      <TouchableOpacity
+                        key={c}
+                        style={[
+                          {
+                            backgroundColor: "#f8fafc",
+                            borderRadius: 20,
+                            paddingHorizontal: 14,
+                            paddingVertical: 8,
+                            marginRight: 8,
+                            borderWidth: 1.5,
+                            borderColor: "#e2e8f0",
+                          },
+                          postFoundCategory === c && {
+                            backgroundColor: "#f0fdf4",
+                            borderColor: "#16a34a",
+                          },
+                        ]}
+                        onPress={() => setPostFoundCategory(c)}
+                      >
+                        <Text
+                          style={[
+                            {
+                              fontSize: 13,
+                              color: "#374151",
+                              fontWeight: "500",
+                            },
+                            postFoundCategory === c && {
+                              color: "#16a34a",
+                              fontWeight: "700",
+                            },
+                          ]}
+                        >
+                          {c}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "600",
+                      color: "#374151",
+                      marginBottom: 8,
+                    }}
+                  >
+                    Description
+                  </Text>
+                  <TextInput
+                    style={{
+                      backgroundColor: "#f8fafc",
+                      borderRadius: 12,
+                      paddingHorizontal: 14,
+                      paddingVertical: 13,
+                      fontSize: 15,
+                      color: "#0f172a",
+                      borderWidth: 1.5,
+                      borderColor: "#e2e8f0",
+                      height: 80,
+                      textAlignVertical: "top",
+                    }}
+                    placeholder="Color, brand, unique marks..."
+                    placeholderTextColor="#9ca3af"
+                    value={postFoundDescription}
+                    onChangeText={setPostFoundDescription}
+                    multiline
+                    textAlignVertical="top"
+                  />
+                </View>
+                <View
+                  style={{
+                    backgroundColor: "#ffffff",
+                    borderRadius: 14,
+                    padding: 16,
+                    borderWidth: 1.5,
+                    borderColor: "#f1f5f9",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "600",
+                      color: "#374151",
+                      marginBottom: 8,
+                    }}
+                  >
+                    Where Found (Room Number)
+                  </Text>
+                  <View
+                    style={[
+                      {
+                        flexDirection: "row",
+                        alignItems: "center",
+                        backgroundColor: "#f8fafc",
+                        borderRadius: 12,
+                        paddingHorizontal: 14,
+                        paddingVertical: 13,
+                        borderWidth: 1.5,
+                        borderColor: "#e2e8f0",
+                      },
+                      postFoundResolvedRoom
+                        ? { borderColor: "#16a34a", backgroundColor: "#f0fdf4" }
+                        : postFoundRoomError
+                          ? { borderColor: "#ef4444" }
+                          : null,
+                    ]}
+                  >
+                    <Ionicons
+                      name="location-outline"
+                      size={16}
+                      color={postFoundResolvedRoom ? "#16a34a" : "#94a3b8"}
+                      style={{ marginRight: 8 }}
+                    />
+                    <TextInput
+                      style={{ flex: 1, fontSize: 15, color: "#0f172a" }}
+                      placeholder="e.g. 319, 214"
+                      placeholderTextColor="#9ca3af"
+                      value={postFoundRoomInput}
+                      onChangeText={handlePostFoundRoomInput}
+                      autoCapitalize="characters"
+                      maxLength={5}
+                    />
+                  </View>
+                  {postFoundResolvedRoom && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        backgroundColor: "#f0fdf4",
+                        borderRadius: 10,
+                        padding: 10,
+                        marginTop: 8,
+                        borderWidth: 1,
+                        borderColor: "#bbf7d0",
+                      }}
+                    >
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={14}
+                        color="#16a34a"
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          color: "#16a34a",
+                          fontWeight: "600",
+                        }}
+                      >
+                        Room {postFoundRoomInput},{" "}
+                        {postFoundResolvedRoom.label}
+                      </Text>
+                    </View>
+                  )}
+                  {postFoundRoomError ? (
+                    <Text
+                      style={{ fontSize: 12, color: "#dc2626", marginTop: 6 }}
+                    >
+                      {postFoundRoomError}
+                    </Text>
+                  ) : null}
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "600",
+                      color: "#374151",
+                      marginBottom: 8,
+                      marginTop: 14,
+                    }}
+                  >
+                    Where to Collect
+                  </Text>
+                  <TextInput
+                    style={{
+                      backgroundColor: "#f8fafc",
+                      borderRadius: 12,
+                      paddingHorizontal: 14,
+                      paddingVertical: 13,
+                      fontSize: 15,
+                      color: "#0f172a",
+                      borderWidth: 1.5,
+                      borderColor: "#e2e8f0",
+                      height: 80,
+                      textAlignVertical: "top",
+                    }}
+                    placeholder="e.g. Room 214 after 2PM, or Staff Room 501"
+                    placeholderTextColor="#9ca3af"
+                    value={postFoundCollectLocation}
+                    onChangeText={setPostFoundCollectLocation}
+                    multiline
+                    textAlignVertical="top"
+                  />
+                </View>
+                {postFoundError ? (
+                  <Text
+                    style={{
+                      color: "#dc2626",
+                      fontSize: 13,
+                      fontWeight: "500",
+                      textAlign: "center",
+                    }}
+                  >
+                    {postFoundError}
+                  </Text>
+                ) : null}
+                <TouchableOpacity
+                  style={[
+                    {
+                      backgroundColor: "#16a34a",
+                      borderRadius: 12,
+                      paddingVertical: 15,
+                      alignItems: "center",
+                    },
+                    postFoundSubmitting && { opacity: 0.55 },
+                  ]}
+                  onPress={handlePostFoundSubmit}
+                  disabled={postFoundSubmitting}
+                  activeOpacity={0.85}
+                >
+                  {postFoundSubmitting ? (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 10,
+                      }}
+                    >
+                      <ActivityIndicator color="#fff" />
+                      <Text
+                        style={{
+                          color: "#fff",
+                          fontSize: 15,
+                          fontWeight: "700",
+                        }}
+                      >
+                        {postFoundUploadingPhoto
+                          ? "Uploading photo..."
+                          : "Publishing..."}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text
+                      style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}
+                    >
+                      Submit Found Item
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+
+        {imageViewerUri && (
+          <ImageViewer
+            uri={imageViewerUri}
+            visible={!!imageViewerUri}
+            onClose={() => setImageViewerUri(null)}
           />
-          <Text style={s.toastText}>{toast.message}</Text>
-        </Animated.View>
-      )}
-</View>
+        )}
+
+        {toast && (
+          <Animated.View
+            style={[
+              s.toast,
+              toast.type === "success" && s.toastSuccess,
+              toast.type === "error" && s.toastError,
+              toast.type === "info" && s.toastInfo,
+              {
+                transform: [
+                  {
+                    translateY: toastAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-80, 0],
+                    }),
+                  },
+                ],
+                opacity: toastAnim,
+              },
+            ]}
+            pointerEvents="none"
+          >
+            <Ionicons
+              name={
+                toast.type === "success"
+                  ? "checkmark-circle"
+                  : toast.type === "error"
+                    ? "close-circle"
+                    : "information-circle"
+              }
+              size={18}
+              color="#fff"
+            />
+            <Text style={s.toastText}>{toast.message}</Text>
+          </Animated.View>
+        )}
+      </View>
     </ScreenWrapper>
   );
 }

@@ -21,7 +21,8 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.unifix.app"
+      "package": "com.unifix.app",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -30,9 +31,20 @@
     },
     "plugins": [
       "expo-router",
-      ["expo-image-picker", {
-        "cameraPermission": "Allow UniFix to access your camera to upload photos."
-      }]
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow UniFix to access your camera to upload photos."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#10b981",
+          "sounds": []
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

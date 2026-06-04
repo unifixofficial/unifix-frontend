@@ -87,13 +87,12 @@ export default function ScreenWrapper({
     prevLoading.current = loading
   }, [loading])
 
- // topPad available if individual screens need it via insets.top 
 
 return (
     <View style={styles.root}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
-   {/* Skeleton layer — only renders after role is known to prevent wrong skeleton flash */}
+   
       {roleReady && (
         <Animated.View
           pointerEvents={loading ? 'auto' : 'none'}
@@ -105,7 +104,7 @@ return (
         </Animated.View>
       )}
 
-      {/* Content layer — fades in beneath */}
+  
       <Animated.View style={{ flex: 1, opacity: contentOpacity }}>
         {scrollable ? (
           <ScrollView showsVerticalScrollIndicator={false}>

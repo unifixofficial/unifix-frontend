@@ -419,8 +419,8 @@ export default function SubmitComplaintScreen() {
           subIssue: finalSubIssue,
           customIssue: finalCustom,
           description: description.trim(),
-          building: `${resolvedRoom.building} — Room ${roomInput.trim()}`,
-          roomDetail: `${roomInput.trim()} — ${resolvedRoom.label}`,
+          building: `${resolvedRoom.building}, Room ${roomInput.trim()}`,
+          roomDetail: `${roomInput.trim()}, ${resolvedRoom.label}`,
           photoUrl,
         }),
       });
@@ -430,7 +430,7 @@ export default function SubmitComplaintScreen() {
         setError(data.error || data.message || "Failed to submit complaint.");
         return;
       }
-      router.replace(`/complaint-success?ticketId=${data.ticketId}` as any);
+      router.replace(`/complaint-success?ticketId=${data.ticketId}&complaintId=${data.complaintId}` as any);
     } catch (err: any) {
       if (err?.message?.includes("Network request failed")) {
         setError(
@@ -593,7 +593,7 @@ export default function SubmitComplaintScreen() {
                 style={{ marginRight: 5 }}
               />
               <Text style={s.resolvedText}>
-                Room {roomInput} — {resolvedRoom.label}, {resolvedRoom.building}
+                Room {roomInput}, {resolvedRoom.label}, {resolvedRoom.building}
               </Text>
             </View>
           )}

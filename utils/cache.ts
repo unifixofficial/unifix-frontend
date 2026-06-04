@@ -1,4 +1,3 @@
-// Replace your entire cache.ts with this:
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 

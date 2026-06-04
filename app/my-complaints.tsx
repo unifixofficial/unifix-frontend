@@ -72,7 +72,7 @@ const hasFetchedRef = useRef(false);
     if (hasFetchedRef.current) return;
       hasFetchedRef.current = true;
 
-      // If already loaded before, show cached instantly — no skeleton
+     
       if (isLoaded(SCREEN_KEY)) {
         const cached = await loadCacheForce('my_complaints');
         if (cached) setComplaints(cached);

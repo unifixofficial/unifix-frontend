@@ -19,7 +19,7 @@ export const useLoadingStore = create<LoadingStore>((set, get) => ({
 
   loaded: {},
   markLoaded: (key) =>
-    set((state) => ({
+    set((state) => ({ 
       loaded: { ...state.loaded, [key]: true },
     })),
   isLoaded: (key) => get().loaded[key] === true,
