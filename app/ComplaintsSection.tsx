@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { doc, onSnapshot } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -138,7 +138,7 @@ const renderStars = (count: number, size: number = 16) => (
 const PROGRESS_STEPS = ["pending", "assigned", "in_progress", "completed"];
 const STEP_LABELS = ["Pending", "Assigned", "In Progress", "Done"];
 
-export default function ComplaintsSection({
+export default memo(function ComplaintsSection({
   complaints,
   complaintsLoading,
   filterTab,
@@ -148,6 +148,7 @@ export default function ComplaintsSection({
   onCall,
   bottomNavHeight,
 }: ComplaintsSectionProps) {
+   
   const router = useRouter();
 
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(
@@ -175,7 +176,7 @@ export default function ComplaintsSection({
     return () => unsub();
   }, [trackingVisible, selectedComplaint?.id]);
 
-  const handleSubmitRating = async () => {
+  const handleSubmitRating = useCallback(async () => {
     if (selectedStars === 0) {
       setRatingError("Please select a star rating.");
       return;
@@ -198,7 +199,7 @@ export default function ComplaintsSection({
     } finally {
       setRatingLoading(false);
     }
-  };
+  }, [ratingComplaint, selectedStars, ratingComment]);
 
   const renderInteractiveStars = (count: number, size: number = 28) => (
     <View style={{ flexDirection: "row", gap: 6 }}>
@@ -218,227 +219,17 @@ export default function ComplaintsSection({
     </View>
   );
 
-  const filteredComplaints = complaints.filter((c) => {
-    if (filterTab === "all") return true;
-    if (filterTab === "pending") return c.status === "pending";
-    if (filterTab === "resolved")
-      return c.status === "completed" || c.status === "rejected";
-    return true;
-  });
-
-  const styles = StyleSheet.create({
-    fullTab: { flex: 1, backgroundColor: "#f8fafc" },
-    tabHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: 20,
-      paddingVertical: 14,
-      backgroundColor: "#ffffff",
-      borderBottomWidth: 1,
-      borderBottomColor: "#f1f5f9",
-    },
-    tabHeaderTitle: { fontSize: 17, fontWeight: "800", color: "#0f172a" },
-    filterRow: {
-      flexDirection: "row",
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      gap: 8,
-      backgroundColor: "#ffffff",
-      borderBottomWidth: 1,
-      borderBottomColor: "#f1f5f9",
-    },
-    filterChip: {
-      paddingHorizontal: 16,
-      paddingVertical: 7,
-      borderRadius: 20,
-      backgroundColor: "#f8fafc",
-      borderWidth: 1.5,
-      borderColor: "#e2e8f0",
-    },
-    filterChipActive: { backgroundColor: "#f0fdf4", borderColor: "#16a34a" },
-    filterChipText: { fontSize: 13, color: "#64748b", fontWeight: "600" },
-    filterChipTextActive: { color: "#16a34a", fontWeight: "700" },
-    tabLoader: { flex: 1, justifyContent: "center", alignItems: "center" },
-    tabContainer: { padding: 16, gap: 12 },
-    emptyState: { alignItems: "center", paddingTop: 60, paddingBottom: 20 },
-    emptyIconWrap: {
-      width: 80,
-      height: 80,
-      borderRadius: 20,
-      backgroundColor: "#f0fdf4",
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 12,
-    },
-    emptyStateTitle: {
-      fontSize: 17,
-      fontWeight: "700",
-      color: "#374151",
-      marginBottom: 6,
-    },
-    emptyStateSub: {
-      fontSize: 13,
-      color: "#94a3b8",
-      textAlign: "center",
-      lineHeight: 20,
-      marginBottom: 20,
-    },
-    actionBtn: {
-      backgroundColor: "#16a34a",
-      borderRadius: 10,
-      paddingVertical: 12,
-      paddingHorizontal: 28,
-      marginTop: 8,
-    },
-    actionBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-    complaintCard: {
-      backgroundColor: "#ffffff",
-      borderRadius: 14,
-      padding: 16,
-      borderWidth: 1.5,
-      borderColor: "#f1f5f9",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05,
-      shadowRadius: 8,
-      elevation: 2,
-    },
-    complaintCardTop: { flexDirection: "row", gap: 12, marginBottom: 14 },
-    complaintCatIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 10,
-      backgroundColor: "#f0fdf4",
-      borderWidth: 1.5,
-      borderColor: "#bbf7d0",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    complaintTitle: {
-      fontSize: 15,
-      fontWeight: "700",
-      color: "#0f172a",
-      marginBottom: 6,
-      lineHeight: 22,
-    },
-    complaintMetaRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      marginBottom: 3,
-    },
-    complaintMetaText: { fontSize: 12, color: "#64748b" },
-    complaintDate: { fontSize: 12, color: "#94a3b8" },
-    complaintThumb: { width: 72, height: 72, borderRadius: 10 },
-    complaintThumbEmpty: {
-      backgroundColor: "#f8fafc",
-      borderWidth: 1.5,
-      borderColor: "#e2e8f0",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    queueBanner: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: "#ede9fe",
-      borderRadius: 6,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      marginTop: 4,
-      alignSelf: "flex-start",
-    },
-    queueBannerText: { fontSize: 11, color: "#7c3aed", fontWeight: "600" },
-    staffBanner: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      backgroundColor: "#eff6ff",
-      borderRadius: 10,
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: "#bfdbfe",
-    },
-    staffLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-    staffIconWrap: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: "#dbeafe",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    staffLabel: {
-      fontSize: 11,
-      color: "#64748b",
-      fontWeight: "600",
-      marginBottom: 2,
-    },
-    staffName: { fontSize: 13, color: "#1e40af", fontWeight: "700" },
-    staffCallBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: "#16a34a",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    complaintCardBottom: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      borderTopWidth: 1,
-      borderTopColor: "#f1f5f9",
-      paddingTop: 12,
-    },
-    statusBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      borderRadius: 8,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-    },
-    statusDot: { width: 6, height: 6, borderRadius: 3 },
-    statusBadgeText: { fontSize: 12, fontWeight: "700" },
-    ratingDisplayRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      paddingVertical: 8,
-      paddingHorizontal: 4,
-      marginBottom: 4,
-    },
-    ratingDisplayText: { fontSize: 12, color: "#64748b", fontWeight: "500" },
-    rateBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: "#fef3c7",
-      borderRadius: 8,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderWidth: 1,
-      borderColor: "#fde68a",
-    },
-    rateBtnText: { fontSize: 12, fontWeight: "700", color: "#d97706" },
-    trackBtn: { flexDirection: "row", alignItems: "center" },
-    trackBtnText: { fontSize: 13, color: "#16a34a", fontWeight: "600" },
-    adminResolvedBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: "#f3e8ff",
-      borderRadius: 8,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      alignSelf: "flex-start",
-      marginBottom: 8,
-      borderWidth: 1,
-      borderColor: "#e9d5ff",
-    },
-    adminResolvedText: { fontSize: 12, fontWeight: "700", color: "#7c3aed" },
-  });
+  const filteredComplaints = useMemo(
+    () =>
+      complaints.filter((c) => {
+        if (filterTab === "all") return true;
+        if (filterTab === "pending") return c.status === "pending";
+        if (filterTab === "resolved")
+          return c.status === "completed" || c.status === "rejected";
+        return true;
+      }),
+    [complaints, filterTab],
+  );
 
   return (
     <>
@@ -467,10 +258,26 @@ export default function ComplaintsSection({
             </TouchableOpacity>
           ))}
         </View>
-        {complaintsLoading ? (
-          <View style={styles.tabLoader}>
-            <ActivityIndicator size="large" color="#16a34a" />
-          </View>
+    {complaintsLoading ? (
+          <ScrollView contentContainerStyle={[styles.tabContainer, { paddingBottom: bottomNavHeight + 20 }]}>
+            {[1, 2, 3].map((i) => (
+              <View key={i} style={[styles.complaintCard, { opacity: 0.6 }]}>
+                <View style={styles.complaintCardTop}>
+                  <View style={[styles.complaintCatIcon, { backgroundColor: "#f1f5f9" }]} />
+                  <View style={{ flex: 1, gap: 8 }}>
+                    <View style={{ height: 16, width: "80%", backgroundColor: "#f1f5f9", borderRadius: 6 }} />
+                    <View style={{ height: 12, width: "60%", backgroundColor: "#f1f5f9", borderRadius: 6 }} />
+                    <View style={{ height: 12, width: "40%", backgroundColor: "#f1f5f9", borderRadius: 6 }} />
+                  </View>
+                  <View style={[styles.complaintThumb, styles.complaintThumbEmpty, { backgroundColor: "#f1f5f9", borderColor: "#f1f5f9" }]} />
+                </View>
+                <View style={[styles.complaintCardBottom, { borderTopColor: "#f1f5f9" }]}>
+                  <View style={{ height: 28, width: 80, backgroundColor: "#f1f5f9", borderRadius: 8 }} />
+                  <View style={{ height: 13, width: 100, backgroundColor: "#f1f5f9", borderRadius: 6 }} />
+                </View>
+              </View>
+            ))}
+          </ScrollView>
         ) : (
           <ScrollView
             contentContainerStyle={[
@@ -532,18 +339,23 @@ export default function ComplaintsSection({
                         <Text style={styles.complaintTitle} numberOfLines={2}>
                           {issueTitle}
                         </Text>
-                        <View style={styles.complaintMetaRow}>
+                   <View style={styles.complaintMetaRow}>
                           <Ionicons
                             name="location-outline"
                             size={12}
                             color="#64748b"
                           />
-                          <Text style={styles.complaintMetaText}>
-                            {[complaint.building, complaint.roomDetail]
-                              .filter(Boolean)
-                              .join(", ")}
+                          <Text style={styles.complaintMetaText} numberOfLines={1} ellipsizeMode="tail">
+                            {complaint.building}
                           </Text>
                         </View>
+                    {complaint.roomDetail ? (
+                          <Text style={[styles.complaintMetaText, { marginLeft: 16, marginBottom: 3 }]} numberOfLines={1} ellipsizeMode="tail">
+                            {complaint.roomDetail.includes(",") 
+                              ? complaint.roomDetail.split(",").slice(1).join(",").trim() 
+                              : complaint.roomDetail}
+                          </Text>
+                        ) : null} 
                         <View style={styles.complaintMetaRow}>
                           <Ionicons
                             name="calendar-outline"
@@ -1101,7 +913,221 @@ export default function ComplaintsSection({
       </Modal>
     </>
   );
-}
+});
+
+const styles = StyleSheet.create({
+  fullTab: { flex: 1, backgroundColor: "#f8fafc" },
+  tabHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  tabHeaderTitle: { fontSize: 17, fontWeight: "800", color: "#0f172a" },
+  filterRow: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+  },
+  filterChipActive: { backgroundColor: "#f0fdf4", borderColor: "#16a34a" },
+  filterChipText: { fontSize: 13, color: "#64748b", fontWeight: "600" },
+  filterChipTextActive: { color: "#16a34a", fontWeight: "700" },
+  tabLoader: { flex: 1, justifyContent: "center", alignItems: "center" },
+  tabContainer: { padding: 16, gap: 12 },
+  emptyState: { alignItems: "center", paddingTop: 60, paddingBottom: 20 },
+  emptyIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    backgroundColor: "#f0fdf4",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  emptyStateTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#374151",
+    marginBottom: 6,
+  },
+  emptyStateSub: {
+    fontSize: 13,
+    color: "#94a3b8",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  actionBtn: {
+    backgroundColor: "#16a34a",
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    marginTop: 8,
+  },
+  actionBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  complaintCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: "#f1f5f9",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  complaintCardTop: { flexDirection: "row", gap: 12, marginBottom: 14 },
+  complaintCatIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "#f0fdf4",
+    borderWidth: 1.5,
+    borderColor: "#bbf7d0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  complaintTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0f172a",
+    marginBottom: 6,
+    lineHeight: 22,
+  },
+  complaintMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 3,
+  },
+  complaintMetaText: { fontSize: 12, color: "#64748b" },
+  complaintDate: { fontSize: 12, color: "#94a3b8" },
+  complaintThumb: { width: 72, height: 72, borderRadius: 10 },
+  complaintThumbEmpty: {
+    backgroundColor: "#f8fafc",
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  queueBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ede9fe",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginTop: 4,
+    alignSelf: "flex-start",
+  },
+  queueBannerText: { fontSize: 11, color: "#7c3aed", fontWeight: "600" },
+  staffBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#eff6ff",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+  },
+  staffLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  staffIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#dbeafe",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  staffLabel: {
+    fontSize: 11,
+    color: "#64748b",
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  staffName: { fontSize: 13, color: "#1e40af", fontWeight: "700" },
+  staffCallBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#16a34a",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  complaintCardBottom: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+    paddingTop: 12,
+  },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusBadgeText: { fontSize: 12, fontWeight: "700" },
+  ratingDisplayRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    marginBottom: 4,
+  },
+  ratingDisplayText: { fontSize: 12, color: "#64748b", fontWeight: "500" },
+  rateBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fef3c7",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#fde68a",
+  },
+  rateBtnText: { fontSize: 12, fontWeight: "700", color: "#d97706" },
+  trackBtn: { flexDirection: "row", alignItems: "center" },
+  trackBtnText: { fontSize: 13, color: "#16a34a", fontWeight: "600" },
+  adminResolvedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f3e8ff",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    alignSelf: "flex-start",
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#e9d5ff",
+  },
+  adminResolvedText: { fontSize: 12, fontWeight: "700", color: "#7c3aed" },
+});
 
 const trackingStyles = StyleSheet.create({
   progressTracker: { marginBottom: 20 },

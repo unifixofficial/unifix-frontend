@@ -1,16 +1,22 @@
-import {
-  View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator, ScrollView, StatusBar, RefreshControl, Linking, Alert,
-} from "react-native";
-import { useEffect, useState, useCallback, useRef } from "react";
+import ScreenWrapper from "@/wrappers/ScreenWrapper";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
-import { saveCache, loadCache, loadCacheForce } from '../utils/cache'
-import { Ionicons } from "@expo/vector-icons";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
+import {
+  Alert,
+  Linking,
+  RefreshControl,
+  ScrollView, StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from "react-native";
 import { auth } from "../firebase/firebaseConfig";
 import { complaintsAPI } from "../services/api";
-import ScreenWrapper from "@/wrappers/ScreenWrapper";
 import { useLoadingStore } from "../store/loadingStore";
+import { loadCacheForce, saveCache } from '../utils/cache';
 
 type RecentComplaint = {
   id: string;
@@ -55,24 +61,57 @@ function formatDateShort(ts: any): string {
 
 type FilterTab = "all" | "pending" | "assigned" | "resolved";
 
-export default function MyComplaintsScreen() {
+const FILTER_TABS: { key: FilterTab; label: string }[] = [
+  { key: "all",      label: "All" },
+  { key: "pending",  label: "Pending" },
+  { key: "assigned", label: "Assigned" },
+  { key: "resolved", label: "Resolved" },
+];
+
+export default memo(function MyComplaintsScreen() {
   const [complaints, setComplaints] = useState<RecentComplaint[]>([]);
- const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
   const router = useRouter();
   const { isLoaded, markLoaded } = useLoadingStore();
   const SCREEN_KEY = 'my-complaints';
+  const hasFetchedRef = useRef(false);
 
-const hasFetchedRef = useRef(false);
+  const fetchComplaints = useCallback(async () => {
+    try {
+      const data = await complaintsAPI.myComplaints();
+      setComplaints(data.complaints || []);
+      saveCache('my_complaints', data.complaints || []);
+    } catch {
+      const cached = await loadCacheForce('my_complaints');
+      if (cached) setComplaints(cached);
+    }
+  }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchComplaints();
+    setRefreshing(false);
+  }, [fetchComplaints]);
+
+  const handleCall = useCallback((phone: string, name: string) => {
+    Alert.alert(
+      `Call ${name}`,
+      `Do you want to call ${name} at ${phone}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Call", onPress: () => Linking.openURL(`tel:${phone}`) },
+      ]
+    );
+  }, []);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) { router.replace("/login" as any); return; }
-    if (hasFetchedRef.current) return;
+      if (hasFetchedRef.current) return;
       hasFetchedRef.current = true;
 
-     
       if (isLoaded(SCREEN_KEY)) {
         const cached = await loadCacheForce('my_complaints');
         if (cached) setComplaints(cached);
@@ -91,40 +130,7 @@ const hasFetchedRef = useRef(false);
       finally { setLoading(false); }
     });
     return () => unsub();
-  }, []);
-
-const fetchComplaints = async () => {
-    try {
-      const data = await complaintsAPI.myComplaints();
-      setComplaints(data.complaints || []);
-      saveCache('my_complaints', data.complaints || [])
-    } catch {
-      const cached = await loadCacheForce('my_complaints')
-      if (cached) setComplaints(cached)
-    }
-  };
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchComplaints();
-    setRefreshing(false);
-  }, []);
-
-  const handleCall = (phone: string, name: string) => {
-    Alert.alert(
-      `Call ${name}`,
-      `Do you want to call ${name} at ${phone}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Call",
-          onPress: () => Linking.openURL(`tel:${phone}`),
-        },
-      ]
-    );
-  };
-
-
+  }, [router, isLoaded, markLoaded]);
 
   const filtered = complaints.filter((c) => {
     if (filterTab === "all") return true;
@@ -134,119 +140,112 @@ const fetchComplaints = async () => {
     return true;
   });
 
-  const FILTER_TABS: { key: FilterTab; label: string }[] = [
-    { key: "all",      label: "All" },
-    { key: "pending",  label: "Pending" },
-    { key: "assigned", label: "Assigned" },
-    { key: "resolved", label: "Resolved" },
-  ];
-
   return (
-   <ScreenWrapper loading={loading} skeleton="complaint">
-    <View style={s.root}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.replace("/" as any)} style={s.backBtn}>
-          <Ionicons name="arrow-back" size={18} color="#0f172a" />
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>My Complaints</Text>
-        <View style={s.notifBtn}>
-          <Ionicons name="notifications-outline" size={18} color="#0f172a" />
-        </View>
-      </View>
-      <View style={s.filterRow}>
-        {FILTER_TABS.map((tab) => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[s.filterChip, filterTab === tab.key && s.filterChipActive]}
-            onPress={() => setFilterTab(tab.key)}
-          >
-            <Text style={[s.filterChipText, filterTab === tab.key && s.filterChipTextActive]}>{tab.label}</Text>
+    <ScreenWrapper loading={loading} skeleton="complaint">
+      <View style={s.root}>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+        <View style={s.header}>
+          <TouchableOpacity onPress={() => router.replace("/" as any)} style={s.backBtn}>
+            <Ionicons name="arrow-back" size={18} color="#0f172a" />
           </TouchableOpacity>
-        ))}
-      </View>
-      <ScrollView
-        contentContainerStyle={s.container}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#16a34a"]} />}
-      >
-        {filtered.length === 0 ? (
-          <View style={s.emptyState}>
-            <View style={s.emptyIconWrap}>
-              <Ionicons name="clipboard-outline" size={36} color="#16a34a" />
-            </View>
-            <Text style={s.emptyTitle}>No complaints found</Text>
-            <Text style={s.emptySub}>
-              {filterTab === "all"
-                ? "You haven't submitted any complaints yet."
-                : `No ${filterTab} complaints right now.`}
-            </Text>
-            <TouchableOpacity style={s.reportBtn} onPress={() => router.push("/submit-complaint" as any)}>
-              <Text style={s.reportBtnText}>Report an Issue</Text>
-            </TouchableOpacity>
+          <Text style={s.headerTitle}>My Complaints</Text>
+          <View style={s.notifBtn}>
+            <Ionicons name="notifications-outline" size={18} color="#0f172a" />
           </View>
-        ) : (
-          filtered.map((c) => {
-            const sm = STATUS_META[c.status] || STATUS_META.pending;
-            const issue = c.subIssue || c.customIssue || "Issue reported";
-            const isAssigned = c.status === "assigned" || c.status === "in_progress";
-
-            return (
-              <TouchableOpacity key={c.id} style={s.card} activeOpacity={0.85} onPress={() => router.push("/submit-complaint" as any)}>
-                <View style={s.cardTop}>
-                  <View style={[s.statusDot, { backgroundColor: sm.dot }]} />
-                  <View style={[s.statusBadge, { backgroundColor: sm.bg }]}>
-                    <Text style={[s.statusBadgeText, { color: sm.color }]}>{sm.label}</Text>
-                  </View>
-                </View>
-                <View style={s.cardBody}>
-                  <Text style={s.issueTitle} numberOfLines={2}>{issue}</Text>
-                  <View style={s.metaRow}>
-                    <Ionicons name="location-outline" size={13} color="#64748b" />
-                    <Text style={s.metaText}>{c.building}</Text>
-                  </View>
-                  <View style={s.metaRow}>
-                    <Ionicons name="calendar-outline" size={13} color="#94a3b8" />
-                    <Text style={s.metaDate}>{formatDateShort(c.createdAt)}</Text>
-                  </View>
-                </View>
-
-                {isAssigned && c.assignedToName ? (
-                  <View style={s.staffBanner}>
-                    <View style={s.staffLeft}>
-                      <View style={s.staffIconWrap}>
-                        <Ionicons name="person" size={14} color="#2563eb" />
-                      </View>
-                      <View>
-                        <Text style={s.staffLabel}>Assigned Staff</Text>
-                        <Text style={s.staffName}>{c.assignedToName}</Text>
-                      </View>
-                    </View>
-                    {c.assignedToPhone ? (
-                      <TouchableOpacity
-                        style={s.callBtn}
-                        onPress={() => handleCall(c.assignedToPhone!, c.assignedToName!)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      >
-                        <Ionicons name="call" size={16} color="#ffffff" />
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                ) : null}
-
-                <View style={s.trackBtn}>
-                  <Text style={s.trackBtnText}>View Tracking</Text>
-                  <Ionicons name="arrow-forward" size={13} color="#16a34a" />
-                </View>
+        </View>
+        <View style={s.filterRow}>
+          {FILTER_TABS.map((tab) => (
+            <TouchableOpacity
+              key={tab.key}
+              style={[s.filterChip, filterTab === tab.key && s.filterChipActive]}
+              onPress={() => setFilterTab(tab.key)}
+            >
+              <Text style={[s.filterChipText, filterTab === tab.key && s.filterChipTextActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <ScrollView
+          contentContainerStyle={s.container}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#16a34a"]} />}
+        >
+          {filtered.length === 0 ? (
+            <View style={s.emptyState}>
+              <View style={s.emptyIconWrap}>
+                <Ionicons name="clipboard-outline" size={36} color="#16a34a" />
+              </View>
+              <Text style={s.emptyTitle}>No complaints found</Text>
+              <Text style={s.emptySub}>
+                {filterTab === "all"
+                  ? "You haven't submitted any complaints yet."
+                  : `No ${filterTab} complaints right now.`}
+              </Text>
+              <TouchableOpacity style={s.reportBtn} onPress={() => router.push("/submit-complaint" as any)}>
+                <Text style={s.reportBtnText}>Report an Issue</Text>
               </TouchableOpacity>
-            );
-          })
-        )}
-      </ScrollView>
-</View>
+            </View>
+          ) : (
+            filtered.map((c) => {
+              const sm = STATUS_META[c.status] || STATUS_META.pending;
+              const issue = c.subIssue || c.customIssue || "Issue reported";
+              const isAssigned = c.status === "assigned" || c.status === "in_progress";
+
+              return (
+                <TouchableOpacity key={c.id} style={s.card} activeOpacity={0.85} onPress={() => router.push("/submit-complaint" as any)}>
+                  <View style={s.cardTop}>
+                    <View style={[s.statusDot, { backgroundColor: sm.dot }]} />
+                    <View style={[s.statusBadge, { backgroundColor: sm.bg }]}>
+                      <Text style={[s.statusBadgeText, { color: sm.color }]}>{sm.label}</Text>
+                    </View>
+                  </View>
+                  <View style={s.cardBody}>
+                    <Text style={s.issueTitle} numberOfLines={2}>{issue}</Text>
+                    <View style={s.metaRow}>
+                      <Ionicons name="location-outline" size={13} color="#64748b" />
+                      <Text style={s.metaText}>{c.building}</Text>
+                    </View>
+                    <View style={s.metaRow}>
+                      <Ionicons name="calendar-outline" size={13} color="#94a3b8" />
+                      <Text style={s.metaDate}>{formatDateShort(c.createdAt)}</Text>
+                    </View>
+                  </View>
+
+                  {isAssigned && c.assignedToName ? (
+                    <View style={s.staffBanner}>
+                      <View style={s.staffLeft}>
+                        <View style={s.staffIconWrap}>
+                          <Ionicons name="person" size={14} color="#2563eb" />
+                        </View>
+                        <View>
+                          <Text style={s.staffLabel}>Assigned Staff</Text>
+                          <Text style={s.staffName}>{c.assignedToName}</Text>
+                        </View>
+                      </View>
+                      {c.assignedToPhone ? (
+                        <TouchableOpacity
+                          style={s.callBtn}
+                          onPress={() => handleCall(c.assignedToPhone!, c.assignedToName!)}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                          <Ionicons name="call" size={16} color="#ffffff" />
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  ) : null}
+
+                  <View style={s.trackBtn}>
+                    <Text style={s.trackBtnText}>View Tracking</Text>
+                    <Ionicons name="arrow-forward" size={13} color="#16a34a" />
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </ScrollView>
+      </View>
     </ScreenWrapper>
   );
-}
+});
 
 const s = StyleSheet.create({
   loader: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#ffffff" },

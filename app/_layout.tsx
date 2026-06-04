@@ -11,6 +11,7 @@ import {
   Alert,
   Animated,
   BackHandler,
+  InteractionManager,
   Platform,
   StyleSheet,
   View,
@@ -104,80 +105,47 @@ async function savePushTokenToServer(token: string) {
 }
 
 function UnifixSplash() {
-  const logoScale = useRef(new Animated.Value(0.75)).current;
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const fromOpacity = useRef(new Animated.Value(0)).current;
-  const nameOpacity = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.parallel([
-        Animated.spring(logoScale, {
-          toValue: 1,
-          useNativeDriver: true,
-          tension: 55,
-          friction: 8,
-        }),
-        Animated.timing(logoOpacity, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.delay(500),
-      Animated.parallel([
-        Animated.timing(fromOpacity, {
-          toValue: 1,
-          duration: 350,
-          useNativeDriver: true,
-        }),
-        Animated.timing(nameOpacity, {
-          toValue: 1,
-          duration: 350,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start();
+    Animated.timing(opacity, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
-  return (
+return (
     <View style={splashStyles.container}>
       <Animated.Image
-        source={require("../assets/splash.png")}
-        style={[
-          splashStyles.logo,
-          { opacity: logoOpacity, transform: [{ scale: logoScale }] },
-        ]}
+        source={require("../assets/1.png")}
+        style={[splashStyles.logo, { opacity }]}
         resizeMode="contain"
       />
       <View style={splashStyles.footer}>
-        <Animated.Text style={[splashStyles.from, { opacity: fromOpacity }]}>
-          from
-        </Animated.Text>
-        <Animated.Text style={[splashStyles.name, { opacity: nameOpacity }]}>
-          VCET
-        </Animated.Text>
+        <Animated.Text style={[splashStyles.from, { opacity }]}>from</Animated.Text>
+        <Animated.Text style={[splashStyles.name, { opacity }]}>VCET</Animated.Text>
       </View>
     </View>
   );
 }
-
 const splashStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffff",
+  backgroundColor: "white",
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 40,
   },
-  logo: {
-    width: 160,
-    height: 160,
+logo: {
+    width: 180,
+    height: 180,
   },
   footer: {
     position: "absolute",
-    bottom: 60,
+    bottom: 40,
     alignItems: "center",
-    gap: 4,
+    gap: 2,
   },
   from: {
     fontSize: 13,
@@ -195,8 +163,9 @@ const splashStyles = StyleSheet.create({
 
 export default function RootLayout() {
   const router = useRouter();
-  const [appReady, setAppReady] = useState(false);
+const [appReady, setAppReady] = useState(false);
   const [initialRoute, setInitialRoute] = useState<string | null>(null);
+  const [minSplashDone, setMinSplashDone] = useState(false);
   const currentRouteRef = useRef<string | null>(null);
   const notificationListener = useRef<Notifications.EventSubscription | null>(
     null,
@@ -433,16 +402,21 @@ export default function RootLayout() {
     };
   }, []);
 
-  useEffect(() => {
-    if (appReady && initialRoute) {
-      router.replace(initialRoute as any);
-    }
-  }, [appReady, initialRoute]);
+useEffect(() => {
+    setTimeout(() => setMinSplashDone(true), 1500);
+  }, []);
 
-  if (!appReady) {
+  useEffect(() => {
+    if (appReady && initialRoute && minSplashDone) {
+      InteractionManager.runAfterInteractions(() => {
+        router.replace(initialRoute as any);
+      });
+    }
+  }, [appReady, initialRoute, minSplashDone]);
+
+  if (!appReady || !minSplashDone) {
     return <UnifixSplash />;
   }
-
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>

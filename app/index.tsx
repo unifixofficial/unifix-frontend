@@ -13,7 +13,7 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   Alert,
   Animated,
@@ -347,18 +347,20 @@ function ImageViewer({
   );
 }
 
-export default function DashboardScreen() {
+export default memo(function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [activeTab, setActiveTab] = useState<TabType>("home");
+ const [activeTab, setActiveTab] = useState<TabType>("home");
+  const activeTabRef = useRef<TabType>("home");
 
   const router = useRouter();
-  const params = useLocalSearchParams<{
+const params = useLocalSearchParams<{
     openTab?: string;
     openComplaintId?: string;
     openLFTab?: string;
+    skeleton?: string;
   }>();
 
   useEffect(() => {
@@ -370,12 +372,13 @@ export default function DashboardScreen() {
         setLfActiveTab(params.openLFTab as LfActiveTab);
       }
     }
-  }, [params.openTab]);
+  }, [params.openTab, params.openLFTab]);
 
-  const hasFetchedRef = useRef(false);
+const hasFetchedRef = useRef(false);
+  const isFirstLoad = useRef(true);
 
   const [complaints, setComplaints] = useState<Complaint[]>([]);
-  const [complaintsLoading, setComplaintsLoading] = useState(true);
+ const [complaintsLoading, setComplaintsLoading] = useState(false);
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
 
   const [userRole, setUserRole] = useState<string>("");
@@ -410,6 +413,7 @@ export default function DashboardScreen() {
       }));
       setComplaints(data);
     } catch {
+      // Error handled silently
     } finally {
       setComplaintsLoading(false);
     }
@@ -431,7 +435,9 @@ export default function DashboardScreen() {
           cachedReports.filter((r: LostReport) => r.postedBy?.uid === uid),
         );
       }
-    } catch {}
+    } catch {
+      // Error handled silently
+    }
 
     try {
       const [feedRes, reportsRes] = await Promise.all([
@@ -439,9 +445,9 @@ export default function DashboardScreen() {
         lostReportsAPI.feed(),
       ]);
 
-      const feedItems = feedRes.items || [];
-      setFeedItems(feedItems);
-      saveCache("lost_found_items", feedItems);
+      const feedItemsData = feedRes.items || [];
+      setFeedItems(feedItemsData);
+      saveCache("lost_found_items", feedItemsData);
 
       const allReports = (reportsRes.items || []) as LostReport[];
       setLostReports(allReports);
@@ -476,7 +482,9 @@ export default function DashboardScreen() {
     try {
       const data = await authAPI.myProfile();
       setHasPendingIdCard(data.hasPendingIdCardRequest || false);
-    } catch {}
+    } catch {
+      // Error handled silently
+    }
   }, []);
 
   const registerPushToken = useCallback(async () => {
@@ -485,21 +493,24 @@ export default function DashboardScreen() {
       if (status !== "granted") return;
       const token = (await Notifications.getExpoPushTokenAsync()).data;
       if (token) await authAPI.savePushToken(token);
-    } catch {}
+    } catch {
+      // Error handled silently
+    }
   }, []);
-
-  useEffect(() => {
+useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) return;
       try {
-        await u.getIdToken(true);
+        if (!hasFetchedRef.current) {
+          await u.getIdToken(true);
+        }
         setCurrentUserId(u.uid);
         const snap = await getDoc(doc(db, "users", u.uid));
         if (!snap.exists()) return;
         setUserData(snap.data() as UserData);
         setUserRole(snap.data()?.role || "");
 
-        if (!hasFetchedRef.current) {
+  if (!hasFetchedRef.current) {
           hasFetchedRef.current = true;
           fetchComplaints(u.uid);
           fetchLostFound(u.uid);
@@ -507,16 +518,20 @@ export default function DashboardScreen() {
           await registerPushToken();
         }
       } catch {
-      } finally {
-        setLoading(false);
+        // Error handled silently
+} finally {
+        if (!hasFetchedRef.current) {
+          setLoading(false);
+        } else {
+          setLoading(false);
+        }
       }
     });
     return () => {
       unsub();
-
       lfUnsubRef.current.forEach((fn) => fn());
     };
-  }, []);
+  }, [fetchComplaints, fetchLostFound, fetchProfile, registerPushToken]);
 
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener(
@@ -547,8 +562,12 @@ export default function DashboardScreen() {
     return () => sub.remove();
   }, []);
 
+const [, startTransition] = useTransition();
   const switchTab = useCallback((tab: TabType) => {
-    setActiveTab(tab);
+    activeTabRef.current = tab;
+    startTransition(() => {
+      setActiveTab(tab);
+    });
   }, []);
 
   const onRefresh = useCallback(async () => {
@@ -566,7 +585,7 @@ export default function DashboardScreen() {
     }
   }, [fetchComplaints, fetchLostFound]);
 
-  const handleCall = (phone: string | null, name: string | null) => {
+  const handleCall = useCallback((phone: string | null, name: string | null) => {
     if (!phone?.trim()) return;
     Alert.alert(
       `Call ${name || "Staff"}`,
@@ -576,14 +595,14 @@ export default function DashboardScreen() {
         { text: "Call", onPress: () => Linking.openURL(`tel:${phone}`) },
       ],
     );
-  };
+  }, []);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await auth.signOut();
     router.replace("/login" as any);
-  };
+  }, [router]);
 
-  const handleDeleteLostReport = async (reportId: string) => {
+  const handleDeleteLostReport = useCallback(async (reportId: string) => {
     Alert.alert(
       "Delete Lost Report",
       "Are you sure you want to delete this report?",
@@ -609,9 +628,9 @@ export default function DashboardScreen() {
         },
       ],
     );
-  };
+  }, []);
 
-  const handleMarkFound = async (id: string) => {
+  const handleMarkFound = useCallback(async (id: string) => {
     Alert.alert("Mark as Found", "Did you find your item?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -632,18 +651,18 @@ export default function DashboardScreen() {
         },
       },
     ]);
-  };
+  }, []);
 
-  const bottomNavHeight = 60 + insets.bottom;
-  const firstName = userData?.fullName?.split(" ")[0] ?? "User";
-  const recentComplaints = complaints.slice(0, 3);
+  const bottomNavHeight = useMemo(() => 60 + insets.bottom, [insets.bottom]);
+  const firstName = useMemo(() => userData?.fullName?.split(" ")[0] ?? "User", [userData?.fullName]);
+  const recentComplaints = useMemo(() => complaints.slice(0, 3), [complaints]);
 
-  const NAV_TABS: {
+  const NAV_TABS = useMemo<{
     key: TabType;
     icon: any;
     activeIcon: any;
     label: string;
-  }[] = [
+  }[]>(() => [
     { key: "home", icon: "home-outline", activeIcon: "home", label: "Home" },
     {
       key: "report",
@@ -669,12 +688,12 @@ export default function DashboardScreen() {
       activeIcon: "person",
       label: "Profile",
     },
-  ];
+  ], []);
 
   return (
-    <ScreenWrapper
+<ScreenWrapper
       loading={loading}
-      skeleton="dashboard"
+      skeleton={params.skeleton === "complaint" ? "complaint" : "dashboard"}
       roleReady={userRole === "student" || userRole === "teacher"}
     >
       <View style={s.root}>
@@ -769,7 +788,7 @@ export default function DashboardScreen() {
           </ScrollView>
         )}
 
-        {activeTab === "complaints" && (
+<View style={activeTab !== "complaints" ? { display: "none" } : { flex: 1 }}>
           <ComplaintsSection
             complaints={complaints}
             complaintsLoading={complaintsLoading}
@@ -780,7 +799,7 @@ export default function DashboardScreen() {
             onCall={handleCall}
             bottomNavHeight={bottomNavHeight}
           />
-        )}
+        </View>
 
         {activeTab === "lostfound" && (
           <LostFoundSection
@@ -861,7 +880,7 @@ export default function DashboardScreen() {
       </View>
     </ScreenWrapper>
   );
-}
+});
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#f8fafc" },

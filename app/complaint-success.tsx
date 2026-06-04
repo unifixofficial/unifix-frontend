@@ -159,9 +159,9 @@ export default function ComplaintSuccessScreen() {
           <Text style={s.ticketId}>{ticketId}</Text>
           <Text style={s.ticketHint}>Save this ID to track your complaint</Text>
         </View>
-        <TouchableOpacity
+    <TouchableOpacity
           style={s.trackBtn}
-          onPress={() => router.replace("/" as any)}
+         onPress={() => router.replace("/?openTab=complaints&skeleton=complaint" as any)}
           activeOpacity={0.85}
         >
           <Ionicons
@@ -172,9 +172,9 @@ export default function ComplaintSuccessScreen() {
           />
           <Text style={s.trackBtnText}>Track My Complaint</Text>
         </TouchableOpacity>
-        <TouchableOpacity
+   <TouchableOpacity
           style={s.homeBtn}
-          onPress={() => router.replace("/" as any)}
+          onPress={() => router.replace("/?openTab=home" as any)}
           activeOpacity={0.85}
         >
           <Ionicons

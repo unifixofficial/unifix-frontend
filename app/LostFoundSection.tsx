@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useState } from "react";
+import React, { memo, useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -236,8 +236,7 @@ async function uploadToCloudinary(
   const data = await res.json();
   return data.secure_url;
 }
-
-export default function LostFoundSection({
+export default memo(function LostFoundSection({
   feedItems,
   lostReports,
   userLostReports,
@@ -302,7 +301,7 @@ export default function LostFoundSection({
 
   const bottomNavHeight = 60 + insets.bottom;
 
-  const handleHandover = async () => {
+  const handleHandover = useCallback(async () => {
     if (!handedToName.trim()) {
       setHandoverError("Please enter the name.");
       return;
@@ -318,9 +317,9 @@ export default function LostFoundSection({
     } finally {
       setHandoverLoading(false);
     }
-  };
+  }, [handedToName, handoverItem, onRefresh]);
 
-  const handlePostFoundRoomInput = (val: string) => {
+  const handlePostFoundRoomInput = useCallback((val: string) => {
     setPostFoundRoomInput(val);
     setPostFoundRoomError("");
     if (!val.trim()) {
@@ -333,9 +332,9 @@ export default function LostFoundSection({
       setPostFoundResolvedRoom(null);
       if (val.trim().length >= 3) setPostFoundRoomError("Invalid room number.");
     }
-  };
+  }, []);
 
-  const handlePostLostRoomInput = (val: string) => {
+  const handlePostLostRoomInput = useCallback((val: string) => {
     setPostLostRoomInput(val);
     setPostLostRoomError("");
     if (!val.trim()) {
@@ -348,9 +347,9 @@ export default function LostFoundSection({
       setPostLostResolvedRoom(null);
       if (val.trim().length >= 3) setPostLostRoomError("Invalid room number.");
     }
-  };
+  }, []);
 
-  const handlePostLostDateInput = (val: string) => {
+  const handlePostLostDateInput = useCallback((val: string) => {
     let digits = val.replace(/\D/g, "");
     if (digits.length > 8) digits = digits.slice(0, 8);
     let formatted = "";
@@ -364,9 +363,9 @@ export default function LostFoundSection({
         "Date must be within last 14 days and not in future.",
       );
     }
-  };
+  }, []);
 
-  const handlePostFoundPickPhoto = async () => {
+  const handlePostFoundPickPhoto = useCallback(async () => {
     Alert.alert("Add Photo", "Choose an option", [
       {
         text: "Take Photo",
@@ -423,9 +422,9 @@ export default function LostFoundSection({
       },
       { text: "Cancel", style: "cancel" },
     ]);
-  };
+  }, []);
 
-  const handlePostLostPickPhoto = async () => {
+  const handlePostLostPickPhoto = useCallback(async () => {
     Alert.alert("Add Photo", "Choose an option", [
       {
         text: "Take Photo",
@@ -484,9 +483,8 @@ export default function LostFoundSection({
       },
       { text: "Cancel", style: "cancel" },
     ]);
-  };
-
-  const handlePostFoundSubmit = async () => {
+  }, []);
+  const handlePostFoundSubmit = useCallback(async () => {
     setPostFoundError("");
     if (!postFoundItemName.trim())
       return setPostFoundError("Please enter the item name.");
@@ -537,9 +535,9 @@ export default function LostFoundSection({
       setPostFoundSubmitting(false);
       setPostFoundUploadingPhoto(false);
     }
-  };
+  }, [postFoundItemName, postFoundResolvedRoom, postFoundCollectLocation, postFoundPhoto, postFoundCategory, postFoundDescription, postFoundRoomInput, onSetLfActiveTab, onRefresh]);
 
-  const handlePostLostSubmit = async () => {
+  const handlePostLostSubmit = useCallback(async () => {
     setPostLostError("");
     if (!postLostItemName.trim())
       return setPostLostError("Please enter the item name.");
@@ -594,9 +592,9 @@ export default function LostFoundSection({
       setPostLostSubmitting(false);
       setPostLostUploadingPhoto(false);
     }
-  };
+  }, [postLostItemName, postLostDescription, postLostResolvedRoom, postLostDateLost, postLostHowToReach, postLostPhoto, postLostCategory, postLostRoomInput, onSetLfActiveTab, onRefresh]);
 
-  const resetPostFoundForm = () => {
+  const resetPostFoundForm = useCallback(() => {
     setPostFoundItemName("");
     setPostFoundCategory("Others");
     setPostFoundDescription("");
@@ -608,9 +606,9 @@ export default function LostFoundSection({
     setPostFoundError("");
     setPostFoundSubmitting(false);
     setPostFoundUploadingPhoto(false);
-  };
+  }, []);
 
-  const resetPostLostForm = () => {
+  const resetPostLostForm = useCallback(() => {
     setPostLostItemName("");
     setPostLostCategory("Other");
     setPostLostDescription("");
@@ -624,250 +622,9 @@ export default function LostFoundSection({
     setPostLostError("");
     setPostLostSubmitting(false);
     setPostLostUploadingPhoto(false);
-  };
+  }, []);
 
-  const s = StyleSheet.create({
-    fullTab: { flex: 1 },
-    tabHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: 20,
-      paddingVertical: 14,
-      backgroundColor: "#ffffff",
-      borderBottomWidth: 1,
-      borderBottomColor: "#f1f5f9",
-    },
-    tabHeaderTitle: { fontSize: 17, fontWeight: "800", color: "#0f172a" },
-    addBtn: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      backgroundColor: "#16a34a",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    segmentRow: {
-      flexDirection: "row",
-      backgroundColor: "#f8fafc",
-      margin: 16,
-      borderRadius: 10,
-      padding: 3,
-      borderWidth: 1.5,
-      borderColor: "#e2e8f0",
-    },
-    segmentBtn: {
-      flex: 1,
-      paddingVertical: 9,
-      borderRadius: 8,
-      alignItems: "center",
-    },
-    segmentBtnActive: {
-      backgroundColor: "#ffffff",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.06,
-      shadowRadius: 4,
-      elevation: 2,
-    },
-    segmentBtnText: { fontSize: 13, fontWeight: "600", color: "#94a3b8" },
-    segmentBtnTextActive: { color: "#0f172a", fontWeight: "700" },
-    tabContainer: { padding: 16, gap: 12 },
-    emptyState: { alignItems: "center", paddingTop: 60, paddingBottom: 20 },
-    emptyIconWrap: {
-      width: 80,
-      height: 80,
-      borderRadius: 20,
-      backgroundColor: "#f0fdf4",
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 12,
-    },
-    emptyStateTitle: {
-      fontSize: 17,
-      fontWeight: "700",
-      color: "#374151",
-      marginBottom: 6,
-    },
-    emptyStateSub: {
-      fontSize: 13,
-      color: "#94a3b8",
-      textAlign: "center",
-      lineHeight: 20,
-      marginBottom: 20,
-    },
-    actionBtn: {
-      backgroundColor: "#16a34a",
-      borderRadius: 10,
-      paddingVertical: 12,
-      paddingHorizontal: 28,
-      marginTop: 8,
-    },
-    actionBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-    lfCard: {
-      backgroundColor: "#ffffff",
-      borderRadius: 14,
-      overflow: "hidden",
-      borderWidth: 1.5,
-      borderColor: "#f1f5f9",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05,
-      shadowRadius: 8,
-      elevation: 2,
-    },
-    lfCardHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      padding: 14,
-      gap: 10,
-    },
-    lfAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
-      backgroundColor: "#f0fdf4",
-      borderWidth: 1.5,
-      borderColor: "#bbf7d0",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    lfAvatarText: { fontSize: 14, fontWeight: "700", color: "#16a34a" },
-    lfPosterName: { fontSize: 14, fontWeight: "600", color: "#0f172a" },
-    lfPosterTime: { fontSize: 11, color: "#94a3b8", marginTop: 1 },
-    myPostBadge: {
-      backgroundColor: "#f0fdf4",
-      borderRadius: 6,
-      paddingHorizontal: 7,
-      paddingVertical: 3,
-      borderWidth: 1,
-      borderColor: "#bbf7d0",
-      marginLeft: 6,
-    },
-    myPostBadgeText: {
-      fontSize: 9,
-      fontWeight: "700",
-      color: "#16a34a",
-      letterSpacing: 0.3,
-    },
-    foundBadge: {
-      backgroundColor: "#16a34a",
-      borderRadius: 6,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      marginLeft: 6,
-    },
-    foundBadgeText: {
-      fontSize: 9,
-      fontWeight: "700",
-      color: "#fff",
-      letterSpacing: 0.3,
-    },
-    lfImage: { width: "100%", height: 200 },
-    lfImageEmpty: {
-      width: "100%",
-      height: 140,
-      backgroundColor: "#f8fafc",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    lfBody: { padding: 14 },
-    lfTitle: {
-      fontSize: 17,
-      fontWeight: "700",
-      color: "#0f172a",
-      marginBottom: 6,
-    },
-    lfDesc: { fontSize: 13, color: "#64748b", lineHeight: 20, marginBottom: 8 },
-    lfMetaRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 5,
-      marginBottom: 4,
-    },
-    lfLocText: { fontSize: 13, color: "#374151", fontWeight: "500" },
-    lfCollectText: { fontSize: 13, color: "#16a34a", fontWeight: "500" },
-    handoverBtn: {
-      backgroundColor: "#16a34a",
-      borderRadius: 10,
-      paddingVertical: 12,
-      alignItems: "center",
-      marginTop: 10,
-    },
-    handoverBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-    handedBox: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: "#f0fdf4",
-      borderRadius: 10,
-      padding: 12,
-      marginTop: 10,
-      borderWidth: 1,
-      borderColor: "#bbf7d0",
-    },
-    handedText: { fontSize: 13, fontWeight: "600", color: "#16a34a" },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: "rgba(15,23,42,0.5)",
-      justifyContent: "flex-end",
-    },
-    modalSheet: {
-      backgroundColor: "#fff",
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      padding: 24,
-    },
-    modalHandle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: "#e2e8f0",
-      alignSelf: "center",
-      marginBottom: 20,
-    },
-    modalIssueTitle: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: "#0f172a",
-      marginBottom: 16,
-      textAlign: "center",
-    },
-    handoverInput: {
-      backgroundColor: "#f8fafc",
-      borderRadius: 10,
-      padding: 14,
-      fontSize: 15,
-      color: "#0f172a",
-      borderWidth: 1.5,
-      borderColor: "#e2e8f0",
-      marginBottom: 8,
-    },
-    handoverError: {
-      fontSize: 13,
-      color: "#dc2626",
-      marginBottom: 8,
-      fontWeight: "500",
-    },
-    handoverBtnRow: { flexDirection: "row", gap: 10, marginTop: 8 },
-    handoverCancelBtn: {
-      flex: 1,
-      backgroundColor: "#f8fafc",
-      borderRadius: 10,
-      paddingVertical: 13,
-      alignItems: "center",
-      borderWidth: 1.5,
-      borderColor: "#e2e8f0",
-    },
-    handoverCancelText: { fontSize: 14, fontWeight: "600", color: "#64748b" },
-    handoverConfirmBtn: {
-      flex: 1,
-      backgroundColor: "#16a34a",
-      borderRadius: 10,
-      paddingVertical: 13,
-      alignItems: "center",
-    },
-    handoverConfirmText: { fontSize: 14, fontWeight: "700", color: "#fff" },
-  });
+ 
 
   return (
     <View style={s.fullTab}>
@@ -2881,6 +2638,249 @@ export default function LostFoundSection({
           </View>
         </KeyboardAvoidingView>
       </Modal>
-    </View>
+   </View>
   );
-}
+});
+
+const s = StyleSheet.create({
+    fullTab: { flex: 1 },
+    tabHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 20,
+      paddingVertical: 14,
+      backgroundColor: "#ffffff",
+      borderBottomWidth: 1,
+      borderBottomColor: "#f1f5f9",
+    },
+    tabHeaderTitle: { fontSize: 17, fontWeight: "800", color: "#0f172a" },
+    addBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: "#16a34a",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    segmentRow: {
+      flexDirection: "row",
+      backgroundColor: "#f8fafc",
+      margin: 16,
+      borderRadius: 10,
+      padding: 3,
+      borderWidth: 1.5,
+      borderColor: "#e2e8f0",
+    },
+    segmentBtn: {
+      flex: 1,
+      paddingVertical: 9,
+      borderRadius: 8,
+      alignItems: "center",
+    },
+    segmentBtnActive: {
+      backgroundColor: "#ffffff",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    segmentBtnText: { fontSize: 13, fontWeight: "600", color: "#94a3b8" },
+    segmentBtnTextActive: { color: "#0f172a", fontWeight: "700" },
+    tabContainer: { padding: 16, gap: 12 },
+    emptyState: { alignItems: "center", paddingTop: 60, paddingBottom: 20 },
+    emptyIconWrap: {
+      width: 80,
+      height: 80,
+      borderRadius: 20,
+      backgroundColor: "#f0fdf4",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 12,
+    },
+    emptyStateTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: "#374151",
+      marginBottom: 6,
+    },
+    emptyStateSub: {
+      fontSize: 13,
+      color: "#94a3b8",
+      textAlign: "center",
+      lineHeight: 20,
+      marginBottom: 20,
+    },
+    actionBtn: {
+      backgroundColor: "#16a34a",
+      borderRadius: 10,
+      paddingVertical: 12,
+      paddingHorizontal: 28,
+      marginTop: 8,
+    },
+    actionBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+    lfCard: {
+      backgroundColor: "#ffffff",
+      borderRadius: 14,
+      overflow: "hidden",
+      borderWidth: 1.5,
+      borderColor: "#f1f5f9",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    lfCardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 14,
+      gap: 10,
+    },
+    lfAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: "#f0fdf4",
+      borderWidth: 1.5,
+      borderColor: "#bbf7d0",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    lfAvatarText: { fontSize: 14, fontWeight: "700", color: "#16a34a" },
+    lfPosterName: { fontSize: 14, fontWeight: "600", color: "#0f172a" },
+    lfPosterTime: { fontSize: 11, color: "#94a3b8", marginTop: 1 },
+    myPostBadge: {
+      backgroundColor: "#f0fdf4",
+      borderRadius: 6,
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      borderWidth: 1,
+      borderColor: "#bbf7d0",
+      marginLeft: 6,
+    },
+    myPostBadgeText: {
+      fontSize: 9,
+      fontWeight: "700",
+      color: "#16a34a",
+      letterSpacing: 0.3,
+    },
+    foundBadge: {
+      backgroundColor: "#16a34a",
+      borderRadius: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      marginLeft: 6,
+    },
+    foundBadgeText: {
+      fontSize: 9,
+      fontWeight: "700",
+      color: "#fff",
+      letterSpacing: 0.3,
+    },
+    lfImage: { width: "100%", height: 200 },
+    lfImageEmpty: {
+      width: "100%",
+      height: 140,
+      backgroundColor: "#f8fafc",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    lfBody: { padding: 14 },
+    lfTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: "#0f172a",
+      marginBottom: 6,
+    },
+    lfDesc: { fontSize: 13, color: "#64748b", lineHeight: 20, marginBottom: 8 },
+    lfMetaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      marginBottom: 4,
+    },
+    lfLocText: { fontSize: 13, color: "#374151", fontWeight: "500" },
+    lfCollectText: { fontSize: 13, color: "#16a34a", fontWeight: "500" },
+    handoverBtn: {
+      backgroundColor: "#16a34a",
+      borderRadius: 10,
+      paddingVertical: 12,
+      alignItems: "center",
+      marginTop: 10,
+    },
+    handoverBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+    handedBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#f0fdf4",
+      borderRadius: 10,
+      padding: 12,
+      marginTop: 10,
+      borderWidth: 1,
+      borderColor: "#bbf7d0",
+    },
+    handedText: { fontSize: 13, fontWeight: "600", color: "#16a34a" },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(15,23,42,0.5)",
+      justifyContent: "flex-end",
+    },
+    modalSheet: {
+      backgroundColor: "#fff",
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 24,
+    },
+    modalHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: "#e2e8f0",
+      alignSelf: "center",
+      marginBottom: 20,
+    },
+    modalIssueTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: "#0f172a",
+      marginBottom: 16,
+      textAlign: "center",
+    },
+    handoverInput: {
+      backgroundColor: "#f8fafc",
+      borderRadius: 10,
+      padding: 14,
+      fontSize: 15,
+      color: "#0f172a",
+      borderWidth: 1.5,
+      borderColor: "#e2e8f0",
+      marginBottom: 8,
+    },
+    handoverError: {
+      fontSize: 13,
+      color: "#dc2626",
+      marginBottom: 8,
+      fontWeight: "500",
+    },
+    handoverBtnRow: { flexDirection: "row", gap: 10, marginTop: 8 },
+    handoverCancelBtn: {
+      flex: 1,
+      backgroundColor: "#f8fafc",
+      borderRadius: 10,
+      paddingVertical: 13,
+      alignItems: "center",
+      borderWidth: 1.5,
+      borderColor: "#e2e8f0",
+    },
+    handoverCancelText: { fontSize: 14, fontWeight: "600", color: "#64748b" },
+    handoverConfirmBtn: {
+      flex: 1,
+      backgroundColor: "#16a34a",
+      borderRadius: 10,
+      paddingVertical: 13,
+      alignItems: "center",
+    },
+    handoverConfirmText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+  });

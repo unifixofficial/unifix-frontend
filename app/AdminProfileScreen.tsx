@@ -1,5 +1,11 @@
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
+import { doc, updateDoc } from "firebase/firestore";
+import React, { memo, useCallback, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
+  Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -8,23 +14,16 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Image,
-  View,
+  View
 } from "react-native";
-import { useState } from "react";
-import * as ImagePicker from "expo-image-picker";
-import { doc, updateDoc } from "firebase/firestore";
-import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../firebase/firebaseConfig";
-import { useRouter } from "expo-router";
-import { Alert } from "react-native";
 
 interface ProfileScreenProps {
   adminData: any;
   allComplaints: any[];
 }
 
-export default function AdminProfileScreen({ adminData, allComplaints }: ProfileScreenProps) {
+export default memo(function AdminProfileScreen({ adminData, allComplaints }: ProfileScreenProps) {
   const router = useRouter();
   const [pwModalVisible, setPwModalVisible] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -33,17 +32,17 @@ export default function AdminProfileScreen({ adminData, allComplaints }: Profile
   const [pwLoading, setPwLoading] = useState(false);
   const [pwError, setPwError] = useState("");
   const [pwSuccess, setPwSuccess] = useState("");
-const [showCurrentPw, setShowCurrentPw] = useState(false);
-const [showNewPw, setShowNewPw] = useState(false);
-const [privacyVisible, setPrivacyVisible] = useState(false);
-const [aboutVisible, setAboutVisible] = useState(false);
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [privacyVisible, setPrivacyVisible] = useState(false);
+  const [aboutVisible, setAboutVisible] = useState(false);
 
-  const resolvedCount = allComplaints.filter((c) => c.status === "completed").length;
-  const totalCount = allComplaints.length;
-  const efficiency = totalCount > 0 ? Math.round((resolvedCount / totalCount) * 100) : 0;
-  const flaggedCount = allComplaints.filter((c) => c.flagged && !c.flagResolved).length;
+  const resolvedCount = useMemo(() => allComplaints.filter((c) => c.status === "completed").length, [allComplaints]);
+  const totalCount = useMemo(() => allComplaints.length, [allComplaints]);
+  const efficiency = useMemo(() => totalCount > 0 ? Math.round((resolvedCount / totalCount) * 100) : 0, [resolvedCount, totalCount]);
+  const flaggedCount = useMemo(() => allComplaints.filter((c) => c.flagged && !c.flagResolved).length, [allComplaints]);
 
-  function handleLogout() {
+  const handleLogout = useCallback(() => {
     Alert.alert("Log Out", "Are you sure you want to log out?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -55,43 +54,44 @@ const [aboutVisible, setAboutVisible] = useState(false);
         },
       },
     ]);
-  }
+  }, [router]);
 
-async function handlePickPhoto() {
-  try {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (result.canceled) return;
-    const uri = result.assets[0].uri;
-    const formData = new FormData();
-    const name = uri.split("/").pop() || `upload_${Date.now()}.jpg`;
-    formData.append("file", { uri, type: "image/jpeg", name } as any);
-    formData.append("upload_preset", "unifix_upload");
-    formData.append("folder", "unifix/profiles");
-    const res = await fetch("https://api.cloudinary.com/v1_1/dcizaxjul/image/upload", { method: "POST", body: formData });
-    if (!res.ok) throw new Error("Upload failed");
-    const data = await res.json();
-    const url = data.secure_url;
-    const u = auth.currentUser;
-    if (u) {
-      await updateDoc(doc(db, "users", u.uid), { photoUrl: url });
+  const handlePickPhoto = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+      const uri = result.assets[0].uri;
+      const formData = new FormData();
+      const name = uri.split("/").pop() || `upload_${Date.now()}.jpg`;
+      formData.append("file", { uri, type: "image/jpeg", name } as any);
+      formData.append("upload_preset", "unifix_upload");
+      formData.append("folder", "unifix/profiles");
+      const res = await fetch("https://api.cloudinary.com/v1_1/dcizaxjul/image/upload", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      const url = data.secure_url;
+      const u = auth.currentUser;
+      if (u) {
+        await updateDoc(doc(db, "users", u.uid), { photoUrl: url });
+      }
+      Alert.alert("Success", "Profile photo updated!");
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Failed to upload photo.");
     }
-    Alert.alert("Success", "Profile photo updated!");
-  } catch (e: any) {
-    Alert.alert("Error", e.message || "Failed to upload photo.");
-  }
-}
+  }, []);
 
-const MENU_ITEMS = [
-  { icon: "shield-checkmark-outline", label: "Privacy Policy", color: "#3b82f6", onPress: () => setPrivacyVisible(true) },
-  { icon: "information-circle-outline", label: "About UNIFIX", color: "#8b5cf6", onPress: () => setAboutVisible(true) },
-];
+  const MENU_ITEMS = useMemo(() => [
+    { icon: "shield-checkmark-outline", label: "Privacy Policy", color: "#3b82f6", onPress: () => setPrivacyVisible(true) },
+    { icon: "information-circle-outline", label: "About UNIFIX", color: "#8b5cf6", onPress: () => setAboutVisible(true) },
+  ], []);
+
   return (
     <View style={styles.root}>
       <View style={styles.header}>
@@ -101,18 +101,18 @@ const MENU_ITEMS = [
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
 
         <View style={styles.profileCard}>
-         <TouchableOpacity onPress={handlePickPhoto} activeOpacity={0.85} style={styles.avatarWrap}>
-  {adminData?.photoUrl ? (
-    <Image source={{ uri: adminData.photoUrl }} style={[styles.avatar, { borderWidth: 2, borderColor: "#16a34a" }]} />
-  ) : (
-    <View style={styles.avatar}>
-      <Text style={styles.avatarText}>{adminData?.fullName?.[0]?.toUpperCase() ?? "A"}</Text>
-    </View>
-  )}
-  <View style={[styles.onlineDot, { backgroundColor: "#16a34a", width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" }]}>
-    <Ionicons name="camera" size={11} color="#fff" />
-  </View>
-</TouchableOpacity>
+          <TouchableOpacity onPress={handlePickPhoto} activeOpacity={0.85} style={styles.avatarWrap}>
+            {adminData?.photoUrl ? (
+              <Image source={{ uri: adminData.photoUrl }} style={[styles.avatar, { borderWidth: 2, borderColor: "#16a34a" }]} />
+            ) : (
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{adminData?.fullName?.[0]?.toUpperCase() ?? "A"}</Text>
+              </View>
+            )}
+            <View style={[styles.onlineDot, { backgroundColor: "#16a34a", width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" }]}>
+              <Ionicons name="camera" size={11} color="#fff" />
+            </View>
+          </TouchableOpacity>
           <Text style={styles.profileName}>{adminData?.fullName ?? "Admin"}</Text>
           <Text style={styles.profileEmail}>{adminData?.email ?? "admin@unifix.com"}</Text>
           <View style={styles.roleBadge}>
@@ -155,7 +155,6 @@ const MENU_ITEMS = [
 
       </ScrollView>
 
-      {/* Privacy Policy Modal */}
       <Modal visible={privacyVisible} animationType="slide" onRequestClose={() => setPrivacyVisible(false)}>
         <View style={{ flex: 1, backgroundColor: "#f0fdf4" }}>
           <View style={{ paddingTop: 52, paddingHorizontal: 20, paddingBottom: 16, backgroundColor: "#ffffff", borderBottomWidth: 1, borderBottomColor: "#f1f5f9", flexDirection: "row", alignItems: "center", gap: 14 }}>
@@ -185,7 +184,6 @@ const MENU_ITEMS = [
         </View>
       </Modal>
 
-      {/* About UNIFIX Modal */}
       <Modal visible={aboutVisible} animationType="slide" onRequestClose={() => setAboutVisible(false)}>
         <View style={{ flex: 1, backgroundColor: "#f0fdf4" }}>
           <View style={{ paddingTop: 52, paddingHorizontal: 20, paddingBottom: 16, backgroundColor: "#ffffff", borderBottomWidth: 1, borderBottomColor: "#f1f5f9", flexDirection: "row", alignItems: "center", gap: 14 }}>
@@ -196,13 +194,13 @@ const MENU_ITEMS = [
           </View>
           <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
             <View style={{ backgroundColor: "#1a3c2e", borderRadius: 20, padding: 28, alignItems: "center", marginBottom: 16 }}>
-            {adminData?.photoUrl ? (
-  <Image source={{ uri: adminData.photoUrl }} style={{ width: 72, height: 72, borderRadius: 20, marginBottom: 14 }} resizeMode="cover" />
-) : (
-  <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: "#4ade80", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
-    <Text style={{ fontSize: 28, fontWeight: "800", color: "#1a3c2e" }}>U</Text>
-  </View>
-)}
+              {adminData?.photoUrl ? (
+                <Image source={{ uri: adminData.photoUrl }} style={{ width: 72, height: 72, borderRadius: 20, marginBottom: 14 }} resizeMode="cover" />
+              ) : (
+                <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: "#4ade80", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                  <Text style={{ fontSize: 28, fontWeight: "800", color: "#1a3c2e" }}>U</Text>
+                </View>
+              )}
               <Text style={{ fontSize: 24, fontWeight: "800", color: "#ffffff", marginBottom: 4 }}>UniFiX</Text>
               <Text style={{ fontSize: 13, color: "#4ade80", fontWeight: "600", marginBottom: 8 }}>Version 1.0.0</Text>
               <Text style={{ fontSize: 12, color: "#94a3b8", textAlign: "center" }}>Campus Complaint & Maintenance Management System</Text>
@@ -229,8 +227,6 @@ const MENU_ITEMS = [
         </View>
       </Modal>
 
-     
-
       <Modal visible={pwModalVisible} animationType="slide" transparent onRequestClose={() => setPwModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.pwModalOverlay}>
           <View style={styles.pwModalSheet}>
@@ -253,20 +249,15 @@ const MENU_ITEMS = [
               </TouchableOpacity>
             </View>
 
-        
-
             {pwError ? <Text style={styles.pwError}>{pwError}</Text> : null}
             {pwSuccess ? <Text style={styles.pwSuccess}>{pwSuccess}</Text> : null}
 
-           
           </View>
         </KeyboardAvoidingView>
       </Modal>
     </View>
   );
-
-  
-}
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#f0fdf4" },

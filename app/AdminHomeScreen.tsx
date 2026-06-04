@@ -1,21 +1,17 @@
-import { useRouter } from "expo-router";
-import { collection, onSnapshot, query, where, orderBy, getDoc, doc } from "firebase/firestore";
-import { useEffect, useRef, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import React, { memo, useCallback, useMemo } from "react";
 import {
-  Alert,
-  ScrollView,
+  Dimensions,
+  Image,
   RefreshControl,
+  ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
-  ActivityIndicator,
-  StatusBar,
-  Dimensions,
+  View
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { db, auth } from "../firebase/firebaseConfig";
-import {Image} from "react-native";
+
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const STATUS_COLORS: Record<string, string> = {
@@ -34,6 +30,16 @@ const STATUS_BG: Record<string, string> = {
   rejected: "#fef2f2",
 };
 
+const CATEGORY_ICONS: Record<string, string> = {
+  Electrical: "flash",
+  Plumbing: "water",
+  Cleaning: "sparkles",
+  "IT / Technical": "wifi",
+  Civil: "construct",
+  Carpentry: "hammer",
+  Lab: "flask",
+};
+
 function formatTimeAgo(ts: any): string {
   if (!ts) return "";
   const date = ts.toDate ? ts.toDate() : new Date(ts._seconds * 1000);
@@ -46,23 +52,6 @@ function formatTimeAgo(ts: any): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-const CATEGORY_ICONS: Record<string, string> = {
-  Electrical: "flash",
-  Plumbing: "water",
-  Cleaning: "sparkles",
-  "IT / Technical": "wifi",
-  Civil: "construct",
-  Carpentry: "hammer",
-  Lab: "flask",
-};
-
-function getCategoryIcon(category: string): string {
-  for (const key of Object.keys(CATEGORY_ICONS)) {
-    if (category?.toLowerCase().includes(key.toLowerCase())) return CATEGORY_ICONS[key];
-  }
-  return "alert-circle";
-}
-
 interface HomeScreenProps {
   flaggedComplaints: any[];
   allComplaints: any[];
@@ -73,7 +62,8 @@ interface HomeScreenProps {
   refreshing?: boolean;
   onRefresh?: () => void;
 }
-export default function AdminHomeScreen({
+
+export default memo(function AdminHomeScreen({
   flaggedComplaints,
   allComplaints,
   pendingStaff,
@@ -83,46 +73,58 @@ export default function AdminHomeScreen({
   refreshing = false,
   onRefresh,
 }: HomeScreenProps) {
-  const getHour = () => new Date().getHours();
-  const greeting = getHour() < 12 ? "Good morning" : getHour() < 17 ? "Good afternoon" : "Good evening";
+  const getHour = useCallback(() => new Date().getHours(), []);
+  const greeting = useMemo(() => {
+    const hour = getHour();
+    return hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  }, [getHour]);
 
-  const totalComplaints = allComplaints.length;
-  const pendingCount = allComplaints.filter((c) => c.status === "pending").length;
-  const inProgressCount = allComplaints.filter((c) => c.status === "in_progress").length;
-  const completedCount = allComplaints.filter((c) => c.status === "completed").length;
-  const flaggedCount = flaggedComplaints.length;
+  const totalComplaints = useMemo(() => allComplaints.length, [allComplaints]);
+  const pendingCount = useMemo(() => allComplaints.filter((c) => c.status === "pending").length, [allComplaints]);
+  const inProgressCount = useMemo(() => allComplaints.filter((c) => c.status === "in_progress").length, [allComplaints]);
+  const completedCount = useMemo(() => allComplaints.filter((c) => c.status === "completed").length, [allComplaints]);
+  const flaggedCount = useMemo(() => flaggedComplaints.length, [flaggedComplaints]);
 
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthlyResolved = allComplaints.filter((c) => {
-    if (c.status !== "completed" || !c.completedAt) return false;
-    const d = c.completedAt.toDate ? c.completedAt.toDate() : new Date(c.completedAt._seconds * 1000);
-    return d >= monthStart;
-  }).length;
+  const monthlyResolved = useMemo(() => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    return allComplaints.filter((c) => {
+      if (c.status !== "completed" || !c.completedAt) return false;
+      const d = c.completedAt.toDate ? c.completedAt.toDate() : new Date(c.completedAt._seconds * 1000);
+      return d >= monthStart;
+    }).length;
+  }, [allComplaints]);
 
-  const recentActivity = allComplaints.slice(0, 5);
+  const recentActivity = useMemo(() => allComplaints.slice(0, 5), [allComplaints]);
+
+  const getCategoryIcon = useCallback((category: string): string => {
+    for (const key of Object.keys(CATEGORY_ICONS)) {
+      if (category?.toLowerCase().includes(key.toLowerCase())) return CATEGORY_ICONS[key];
+    }
+    return "alert-circle";
+  }, []);
 
   return (
     <View style={styles.root}>
       <StatusBar barStyle="dark-content" backgroundColor="#f0fdf4" />
 
-  <View style={styles.header}>
-  <View style={styles.headerLeft}>
-   {adminData?.photoUrl ? (
-  <Image source={{ uri: adminData.photoUrl }} style={[styles.avatarSmall, { borderWidth: 1.5, borderColor: "#4ade80" }]} />
-) : (
-  <View style={styles.avatarSmall}>
-    <Text style={styles.avatarSmallText}>{adminData?.fullName?.[0]?.toUpperCase() ?? "A"}</Text>
-  </View>
-)}
-    <View>
-      <Text style={styles.appName}>UniFix</Text>
-      <Text style={styles.appSubtitle}>VCET Admin</Text>
-    </View>
-  </View>
-</View>
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          {adminData?.photoUrl ? (
+            <Image source={{ uri: adminData.photoUrl }} style={[styles.avatarSmall, { borderWidth: 1.5, borderColor: "#4ade80" }]} />
+          ) : (
+            <View style={styles.avatarSmall}>
+              <Text style={styles.avatarSmallText}>{adminData?.fullName?.[0]?.toUpperCase() ?? "A"}</Text>
+            </View>
+          )}
+          <View>
+            <Text style={styles.appName}>UniFix</Text>
+            <Text style={styles.appSubtitle}>VCET Admin</Text>
+          </View>
+        </View>
+      </View>
 
-     <ScrollView
+      <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -255,7 +257,7 @@ export default function AdminHomeScreen({
       </TouchableOpacity>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#f0fdf4" },
@@ -280,7 +282,6 @@ const styles = StyleSheet.create({
   avatarSmallText: { fontSize: 16, fontWeight: "800", color: "#ffffff" },
   appName: { fontSize: 15, fontWeight: "800", color: "#1a3c2e" },
   appSubtitle: { fontSize: 11, color: "#4ade80", fontWeight: "600" },
-
   scroll: { flex: 1 },
   greetingSection: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20 },
   greetingText: { fontSize: 26, fontWeight: "800", color: "#1a3c2e", marginBottom: 4 },

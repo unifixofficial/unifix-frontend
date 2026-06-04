@@ -2,19 +2,20 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { doc, updateDoc } from "firebase/firestore";
-import { useState } from "react";
+import React, { memo, useCallback, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { auth, db } from "../firebase/firebaseConfig";
@@ -47,7 +48,11 @@ type ProfileScreen =
   | "main"
   | "personalInfo"
   | "changePassword"
-  | "reportSecurity";
+  | "reportSecurity"
+  | "legal"
+  | "settings";
+
+type ProfileScreenHistory = ProfileScreen[];
 
 interface ProfileSectionProps {
   userData: UserData | null;
@@ -81,7 +86,7 @@ async function uploadToCloudinary(
   return data.secure_url;
 }
 
-export default function ProfileSection({
+export default memo(function ProfileSection({
   userData,
   onLogout,
   hasPendingIdCard = false,
@@ -89,7 +94,22 @@ export default function ProfileSection({
 }: ProfileSectionProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [profileScreen, setProfileScreen] = useState<ProfileScreen>("main");
+ const [profileScreen, setProfileScreen] = useState<ProfileScreen>("main");
+  const [screenHistory, setScreenHistory] = useState<ProfileScreenHistory>([]);
+
+  const navigateTo = useCallback((screen: ProfileScreen) => {
+    setScreenHistory((prev) => [...prev, profileScreen]);
+    setProfileScreen(screen);
+  }, [profileScreen]);
+
+  const goBack = useCallback(() => {
+    setScreenHistory((prev) => {
+      const newHistory = [...prev];
+      const lastScreen = newHistory.pop();
+      setProfileScreen(lastScreen || "main");
+      return newHistory;
+    });
+  }, []);
 
   // Personal Info state
   const [editName, setEditName] = useState("");
@@ -123,13 +143,17 @@ export default function ProfileSection({
   const [idCardSuccess, setIdCardSuccess] = useState("");
 
   const bottomNavHeight = 60 + insets.bottom;
-  const firstName = userData?.fullName?.split(" ")[0] ?? "User";
-  const idCardUrl =
-    userData?.studentIdCardUrl || userData?.teacherIdCardUrl || null;
-  const uniqueId =
-    userData?.role === "student" ? userData?.rollNumber : userData?.teacherId;
+  const firstName = useMemo(() => userData?.fullName?.split(" ")[0] ?? "User", [userData?.fullName]);
+  const idCardUrl = useMemo(
+    () => userData?.studentIdCardUrl || userData?.teacherIdCardUrl || null,
+    [userData?.studentIdCardUrl, userData?.teacherIdCardUrl]
+  );
+  const uniqueId = useMemo(
+    () => userData?.role === "student" ? userData?.rollNumber : userData?.teacherId,
+    [userData?.role, userData?.rollNumber, userData?.teacherId]
+  );
 
-  const handlePickPhoto = async () => {
+   const handlePickPhoto = useCallback(async () => {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) return;
@@ -154,9 +178,9 @@ export default function ProfileSection({
     } finally {
       setPhotoUploading(false);
     }
-  };
+  }, [onIdCardUpdate]);
 
-  const handleSaveProfile = async () => {
+  const handleSaveProfile = useCallback(async () => {
     setProfileError("");
     setProfileSuccess("");
     if (!editName.trim()) {
@@ -184,9 +208,9 @@ export default function ProfileSection({
     } finally {
       setProfileSaving(false);
     }
-  };
+  }, [editName, editPhone, onIdCardUpdate]);
 
-  const handleChangePassword = async () => {
+  const handleChangePassword = useCallback(async () => {
     setPwError("");
     setPwSuccess("");
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -221,9 +245,9 @@ export default function ProfileSection({
     } finally {
       setPwLoading(false);
     }
-  };
+  }, [currentPassword, newPassword, confirmPassword]);
 
-  const handleLogoutAllDevices = async () => {
+  const handleLogoutAllDevices = useCallback(async () => {
     Alert.alert(
       "Logout All Devices",
       "This will end all active sessions on all devices.",
@@ -241,9 +265,9 @@ export default function ProfileSection({
         },
       ],
     );
-  };
+  }, [onLogout]);
 
-  const handleDeleteAccount = async () => {
+  const handleDeleteAccount = useCallback(async () => {
     const isStaff = userData?.role === "staff";
     Alert.alert(
       "Delete Account",
@@ -273,9 +297,8 @@ export default function ProfileSection({
         },
       ],
     );
-  };
-
-  const handleSubmitSecurityIssue = async () => {
+  }, [userData?.role, onLogout]);
+   const handleSubmitSecurityIssue = useCallback(async () => {
     setSecurityError("");
     setSecuritySuccess("");
     if (!securityIssueType) {
@@ -302,9 +325,9 @@ export default function ProfileSection({
     } finally {
       setSecurityLoading(false);
     }
-  };
+  }, [securityIssueType, securityDescription]);
 
-  const handleIdCardReUpload = async () => {
+  const handleIdCardReUpload = useCallback(async () => {
     setIdCardError("");
     setIdCardSuccess("");
     try {
@@ -334,9 +357,9 @@ export default function ProfileSection({
     } finally {
       setIdCardUploading(false);
     }
-  };
+  }, [userData?.role, onIdCardUpdate]);
 
-  const renderStars = (count: number, size: number = 28) => (
+  const renderStars = useCallback((count: number, size: number = 28) => (
     <View style={{ flexDirection: "row", gap: 6 }}>
       {[1, 2, 3, 4, 5].map((star) => (
         <Ionicons
@@ -347,8 +370,7 @@ export default function ProfileSection({
         />
       ))}
     </View>
-  );
-
+  ), []);
   const renderProfileMain = () => (
     <ScrollView
       style={s.scroll}
@@ -380,7 +402,7 @@ export default function ProfileSection({
                   .toUpperCase() ?? "U"}
               </Text>
             </View>
-          )}
+          )}  
           <View style={s.profileCameraBtn}>
             {photoUploading ? (
               <ActivityIndicator size="small" color="#fff" />
@@ -416,7 +438,7 @@ export default function ProfileSection({
           setEditPhone(userData?.phone || "");
           setProfileError("");
           setProfileSuccess("");
-          setProfileScreen("personalInfo");
+          navigateTo("personalInfo");
         }}
       >
         <View style={s.menuCardLeft}>
@@ -451,75 +473,45 @@ export default function ProfileSection({
         </TouchableOpacity>
       )}
 
-      <View style={s.sectionBlock}>
-        <Text style={s.sectionBlockTitle}>Privacy & Security</Text>
-        <TouchableOpacity
-          style={s.securityRow}
-          activeOpacity={0.85}
-          onPress={() => {
-            setCurrentPassword("");
-            setNewPassword("");
-            setConfirmPassword("");
-            setPwError("");
-            setPwSuccess("");
-            setProfileScreen("changePassword");
-          }}
-        >
-          <View style={[s.menuIconWrap, { backgroundColor: "#f0fdf4" }]}>
-            <Ionicons name="lock-closed-outline" size={18} color="#16a34a" />
+    <TouchableOpacity
+        style={s.menuCard}
+        activeOpacity={0.85}
+       onPress={() => navigateTo("settings")}
+      >
+        <View style={s.menuCardLeft}>
+          <View style={[s.menuIconWrap, { backgroundColor: "#f8fafc" }]}>
+            <Ionicons name="settings-outline" size={18} color="#64748b" />
           </View>
-          <Text style={s.securityRowLabel}>Change Password</Text>
-          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
-        </TouchableOpacity>
-        <View style={s.securityDivider} />
-        <TouchableOpacity
-          style={s.securityRow}
-          activeOpacity={0.85}
-          onPress={handleLogoutAllDevices}
-        >
-          <View style={[s.menuIconWrap, { backgroundColor: "#f0fdf4" }]}>
-            <Ionicons name="phone-portrait-outline" size={18} color="#16a34a" />
+          <Text style={s.menuLabel}>Settings</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+      </TouchableOpacity>
+   <TouchableOpacity
+        style={s.menuCard}
+        activeOpacity={0.85}
+       onPress={() => navigateTo("legal")}
+      >
+        <View style={s.menuCardLeft}>
+          <View style={[s.menuIconWrap, { backgroundColor: "#f0f9ff" }]}>
+            <Ionicons name="information-circle-outline" size={18} color="#0ea5e9" />
           </View>
-          <Text style={s.securityRowLabel}>Logout from all devices</Text>
-          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
-        </TouchableOpacity>
-        <View style={s.securityDivider} />
-        <TouchableOpacity
-          style={s.securityRow}
-          activeOpacity={0.85}
-          onPress={handleDeleteAccount}
-        >
-          <View style={[s.menuIconWrap, { backgroundColor: "#fef2f2" }]}>
-            <Ionicons name="trash-outline" size={18} color="#dc2626" />
-          </View>
-          <Text style={[s.securityRowLabel, { color: "#dc2626" }]}>
-            Delete Account
-          </Text>
-          <Ionicons name="chevron-forward" size={20} color="#dc2626" />
-        </TouchableOpacity>
-        <View style={s.securityDivider} />
-        <TouchableOpacity
-          style={s.securityRow}
-          activeOpacity={0.85}
-          onPress={() => {
-            setSecurityIssueType("");
-            setSecurityDescription("");
-            setSecurityError("");
-            setSecuritySuccess("");
-            setProfileScreen("reportSecurity");
-          }}
-        >
-          <View style={[s.menuIconWrap, { backgroundColor: "#fff7ed" }]}>
-            <Ionicons name="shield-outline" size={18} color="#d97706" />
-          </View>
-          <Text style={s.securityRowLabel}>Report Security Issue</Text>
-          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
-        </TouchableOpacity>
-      </View>
+          <Text style={s.menuLabel}>Legal</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+      </TouchableOpacity>
 
-      <TouchableOpacity
+ <TouchableOpacity
         style={s.logoutBtn}
-        onPress={onLogout}
+        onPress={() => {
+          Alert.alert(
+            "Log Out",
+            "Are you sure you want to log out?",
+            [
+              { text: "No", style: "cancel" },
+              { text: "Yes", style: "destructive", onPress: onLogout },
+            ]
+          );
+        }}
         activeOpacity={0.85}
       >
         <Ionicons
@@ -541,10 +533,7 @@ export default function ProfileSection({
       showsVerticalScrollIndicator={false}
     >
       <View style={s.subPageHeader}>
-        <TouchableOpacity
-          style={s.backBtn}
-          onPress={() => setProfileScreen("main")}
-        >
+       <TouchableOpacity style={s.backBtn} onPress={goBack}>
           <Ionicons name="arrow-back" size={20} color="#0f172a" />
         </TouchableOpacity>
         <Text style={s.subPageTitle}>Personal Information</Text>
@@ -783,13 +772,10 @@ export default function ProfileSection({
         showsVerticalScrollIndicator={false}
       >
         <View style={s.subPageHeader}>
-          <TouchableOpacity
-            style={s.backBtn}
-            onPress={() => setProfileScreen("main")}
-          >
-            <Ionicons name="arrow-back" size={20} color="#0f172a" />
-          </TouchableOpacity>
-          <Text style={s.subPageTitle}>Change Password</Text>
+          <TouchableOpacity style={s.backBtn} onPress={goBack}>
+          <Ionicons name="arrow-back" size={20} color="#0f172a" />
+        </TouchableOpacity>
+        <Text style={s.subPageTitle}>Change Password</Text>
         </View>
         <View style={s.formCard}>
           <Text style={s.formSectionLabel}>UPDATE PASSWORD</Text>
@@ -925,13 +911,10 @@ export default function ProfileSection({
         showsVerticalScrollIndicator={false}
       >
         <View style={s.subPageHeader}>
-          <TouchableOpacity
-            style={s.backBtn}
-            onPress={() => setProfileScreen("main")}
-          >
-            <Ionicons name="arrow-back" size={20} color="#0f172a" />
-          </TouchableOpacity>
-          <Text style={s.subPageTitle}>Report Security Issue</Text>
+         <TouchableOpacity style={s.backBtn} onPress={goBack}>
+          <Ionicons name="arrow-back" size={20} color="#0f172a" />
+        </TouchableOpacity>
+        <Text style={s.subPageTitle}>Report Security Issue</Text>
         </View>
         <View style={s.formCard}>
           <Text style={s.formSectionLabel}>ISSUE DETAILS</Text>
@@ -1005,15 +988,137 @@ export default function ProfileSection({
     </KeyboardAvoidingView>
   );
 
+const renderSettings = () => (
+    <ScrollView
+      style={s.scroll}
+      contentContainerStyle={[s.container, { paddingBottom: 40 }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={s.subPageHeader}>
+       <TouchableOpacity style={s.backBtn} onPress={goBack}>
+          <Ionicons name="arrow-back" size={20} color="#0f172a" />
+        </TouchableOpacity>
+        <Text style={s.subPageTitle}>Settings</Text>
+      </View>
+
+      <View style={s.sectionBlock}>
+        <Text style={s.sectionBlockTitle}>ACCOUNT</Text>
+        <TouchableOpacity
+          style={s.securityRow}
+          activeOpacity={0.85}
+          onPress={() => {
+            setCurrentPassword("");
+            setNewPassword("");
+            setConfirmPassword("");
+            setPwError("");
+            setPwSuccess("");
+            navigateTo("changePassword");
+          }}
+        >
+          <View style={[s.menuIconWrap, { backgroundColor: "#f0fdf4" }]}>
+            <Ionicons name="lock-closed-outline" size={18} color="#16a34a" />
+          </View>
+          <Text style={s.securityRowLabel}>Change Password</Text>
+          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+        </TouchableOpacity>
+        <View style={s.securityDivider} />
+        <TouchableOpacity
+          style={s.securityRow}
+          activeOpacity={0.85}
+          onPress={handleLogoutAllDevices}
+        >
+          <View style={[s.menuIconWrap, { backgroundColor: "#f0fdf4" }]}>
+            <Ionicons name="phone-portrait-outline" size={18} color="#16a34a" />
+          </View>
+          <Text style={s.securityRowLabel}>Logout from All Devices</Text>
+          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+        </TouchableOpacity>
+        <View style={s.securityDivider} />
+        <TouchableOpacity
+          style={s.securityRow}
+          activeOpacity={0.85}
+          onPress={() => {
+            setSecurityIssueType("");
+            setSecurityDescription("");
+            setSecurityError("");
+            setSecuritySuccess("");
+           navigateTo("reportSecurity");
+          }}
+        >
+          <View style={[s.menuIconWrap, { backgroundColor: "#fff7ed" }]}>
+            <Ionicons name="shield-outline" size={18} color="#d97706" />
+          </View>
+          <Text style={s.securityRowLabel}>Report Security Issue</Text>
+          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+        </TouchableOpacity>
+        <View style={s.securityDivider} />
+        <TouchableOpacity
+          style={s.securityRow}
+          activeOpacity={0.85}
+          onPress={handleDeleteAccount}
+        >
+          <View style={[s.menuIconWrap, { backgroundColor: "#fef2f2" }]}>
+            <Ionicons name="trash-outline" size={18} color="#dc2626" />
+          </View>
+          <Text style={[s.securityRowLabel, { color: "#dc2626" }]}>
+            Delete Account
+          </Text>
+          <Ionicons name="chevron-forward" size={20} color="#dc2626" />
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+
+  const renderLegal = () => (
+    <ScrollView
+      style={s.scroll}
+      contentContainerStyle={[s.container, { paddingBottom: 40 }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={s.subPageHeader}>
+       <TouchableOpacity style={s.backBtn} onPress={goBack}>
+          <Ionicons name="arrow-back" size={20} color="#0f172a" />
+        </TouchableOpacity>
+        <Text style={s.subPageTitle}>Legal</Text>
+      </View>
+
+ {[
+        { label: "Terms & Conditions", icon: "document-text-outline", url: "https://unifixapp.vercel.app/terms" },
+        { label: "Privacy Policy", icon: "shield-checkmark-outline", url: "https://unifixapp.vercel.app/privacy" },
+        { label: "Copyright", icon: "copyright-outline", url: null },
+        // { label: "Open Source Licenses", icon: "code-slash-outline", url: null },
+      ].map((item, index) => (
+        <TouchableOpacity
+          key={index}
+          style={s.menuCard}
+          activeOpacity={0.85}
+          onPress={() => { if (item.url) Linking.openURL(item.url); }}
+        >
+          <View style={s.menuCardLeft}>
+            <View style={[s.menuIconWrap, { backgroundColor: "#f0f9ff" }]}>
+              <Ionicons name={item.icon as any} size={18} color="#0ea5e9" />
+            </View>
+            <Text style={s.menuLabel}>{item.label}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+        </TouchableOpacity>
+      ))}
+
+     
+    </ScrollView>
+  );
+
   return (
     <>
       {profileScreen === "main" && renderProfileMain()}
       {profileScreen === "personalInfo" && renderPersonalInfo()}
       {profileScreen === "changePassword" && renderChangePassword()}
-      {profileScreen === "reportSecurity" && renderReportSecurity()}
+  {profileScreen === "reportSecurity" && renderReportSecurity()}
+      {profileScreen === "legal" && renderLegal()}
+      {profileScreen === "settings" && renderSettings()}
     </>
   );
-}
+});
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },

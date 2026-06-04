@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import React, { memo, useCallback, useMemo, useState } from "react";
 import {
-  ScrollView,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { ComplaintDetailModal } from "./AdminComplaintsScreen";
 
 function formatTimestamp(ts: any): string {
@@ -51,7 +51,7 @@ interface HistoryScreenProps {
   onRefresh?: () => void;
 }
 
-export default function AdminHistoryScreen({
+export default memo(function AdminHistoryScreen({
   allComplaints,
   flaggedComplaints,
   onIWillHandle,
@@ -61,20 +61,23 @@ export default function AdminHistoryScreen({
   onRefresh,
 }: HistoryScreenProps) {
   const [activeTab, setActiveTab] = useState<"flagged" | "completed">("flagged");
-const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null);
-const [modalVisible, setModalVisible] = useState(false);
+  const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
-const completedComplaints = allComplaints.filter((c) => c.status === "completed" && c.flagged === true);
-const flaggedActive = allComplaints.filter((c) => c.flagged === true && !c.flagResolved && c.status !== "completed");
-const flaggedHistory = allComplaints.filter((c) => c.flagged === true && c.flagResolved === true);
-const allFlagged = [...flaggedActive, ...flaggedHistory];
+  const completedComplaints = useMemo(() => allComplaints.filter((c) => c.status === "completed" && c.flagged === true), [allComplaints]);
+  const flaggedActive = useMemo(() => allComplaints.filter((c) => c.flagged === true && !c.flagResolved && c.status !== "completed"), [allComplaints]);
+  const flaggedHistory = useMemo(() => allComplaints.filter((c) => c.flagged === true && c.flagResolved === true), [allComplaints]);
+  const allFlagged = useMemo(() => [...flaggedActive, ...flaggedHistory], [flaggedActive, flaggedHistory]);
 
-const selectedComplaint = allComplaints.find((c) => c.id === selectedComplaintId) ?? allFlagged.find((c) => c.id === selectedComplaintId) ?? null;
+  const selectedComplaint = useMemo(() => 
+    allComplaints.find((c) => c.id === selectedComplaintId) ?? allFlagged.find((c) => c.id === selectedComplaintId) ?? null,
+    [allComplaints, allFlagged, selectedComplaintId]
+  );
 
-function openComplaint(item: any) {
-  setSelectedComplaintId(item.id);
-  setModalVisible(true);
-}
+  const openComplaint = useCallback((item: any) => {
+    setSelectedComplaintId(item.id);
+    setModalVisible(true);
+  }, []);
 
   return (
     <View style={styles.root}>
@@ -101,7 +104,7 @@ function openComplaint(item: any) {
         </TouchableOpacity>
       </View>
 
-     <ScrollView
+      <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -114,7 +117,6 @@ function openComplaint(item: any) {
           />
         }
       >
-
         {activeTab === "flagged" && (
           <View style={styles.section}>
             {allFlagged.length === 0 ? (
@@ -257,17 +259,17 @@ function openComplaint(item: any) {
         )}
       </ScrollView>
 
-  <ComplaintDetailModal
-  complaint={selectedComplaint}
-  visible={modalVisible}
-  onClose={() => setModalVisible(false)}
-  onIWillHandle={onIWillHandle}
-  onMarkResolved={onMarkResolved}
-  actionLoading={actionLoading}
-/>
+      <ComplaintDetailModal
+        complaint={selectedComplaint}
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onIWillHandle={onIWillHandle}
+        onMarkResolved={onMarkResolved}
+        actionLoading={actionLoading}
+      />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#f0fdf4" },

@@ -16,13 +16,15 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.unifix.app"
     },
-    "android": {
+"android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.unifix.app",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "jsEngine": "hermes",
+      "allowBackup": false
     },
     "web": {
       "bundler": "metro",

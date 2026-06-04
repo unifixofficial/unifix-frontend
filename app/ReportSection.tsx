@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import React, { memo, useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -237,7 +237,7 @@ async function uploadToCloudinary(
   return data.secure_url;
 }
 
-export default function ReportSection({
+export default memo(function ReportSection({
   bottomNavHeight,
   onBackToHome,
 }: ReportSectionProps) {
@@ -261,9 +261,9 @@ export default function ReportSection({
   const [reportUploadingPhoto, setReportUploadingPhoto] = useState(false);
   const [reportError, setReportError] = useState("");
 
-  const reportSubIssues = REPORT_SUB_ISSUES[reportCategory] || [];
+  const reportSubIssues = useMemo(() => REPORT_SUB_ISSUES[reportCategory] || [], [reportCategory]);
 
-  const handleReportRoomInput = (val: string) => {
+  const handleReportRoomInput = useCallback((val: string) => {
     setReportRoomInput(val);
     setReportRoomError("");
     if (!val.trim()) {
@@ -283,9 +283,9 @@ export default function ReportSection({
       if (val.trim().length >= 3)
         setReportRoomError("Room not found. Try e.g. 319, 214, 003A.");
     }
-  };
+  }, []);
 
-  const handleReportPickPhoto = async () => {
+  const handleReportPickPhoto = useCallback(async () => {
     Alert.alert("Add Photo", "Choose an option", [
       {
         text: "Take Photo",
@@ -342,9 +342,9 @@ export default function ReportSection({
       },
       { text: "Cancel", style: "cancel" },
     ]);
-  };
+  }, []);
 
-  const handleReportSubmit = async () => {
+  const handleReportSubmit = useCallback(async () => {
     setReportError("");
     const category = reportCategory || "others";
     const finalSubIssue = reportSubIssue || null;
@@ -425,240 +425,8 @@ export default function ReportSection({
       setReportSubmitting(false);
       setReportUploadingPhoto(false);
     }
-  };
+  }, [reportCategory, reportSubIssue, reportResolvedRoom, reportDescription, reportRoomInput, reportPhoto, router]);
 
-  const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#ffffff" },
-    header: {
-      backgroundColor: "#e8f5e9",
-      marginHorizontal: -20,
-      paddingTop: insets.top,
-      paddingBottom: 20,
-      paddingHorizontal: 20,
-      marginBottom: 20,
-    },
-    headerRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: 16,
-    },
-    backButton: {
-      width: 32,
-      height: 32,
-      borderRadius: 8,
-      backgroundColor: "rgba(255,255,255,0.7)",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    headerTitle: { fontSize: 16, fontWeight: "700", color: "#0f172a" },
-    progressContainer: { flexDirection: "row", gap: 6, marginBottom: 16 },
-    progressDot: { width: 32, height: 5, borderRadius: 3 },
-    progressDotActive: { backgroundColor: "#16a34a" },
-    progressDotInactive: { backgroundColor: "#a7d7a9" },
-    mainTitle: {
-      fontSize: 24,
-      fontWeight: "800",
-      color: "#0f172a",
-      marginBottom: 6,
-      letterSpacing: -0.3,
-    },
-    subText: { fontSize: 13, color: "#4b5563", lineHeight: 20 },
-    sectionLabel: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: "#16a34a",
-      letterSpacing: 1,
-      marginBottom: 12,
-      marginTop: 4,
-    },
-    categoryScroll: { marginBottom: 4 },
-    categoryBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      paddingVertical: 10,
-      paddingHorizontal: 16,
-      borderRadius: 24,
-      backgroundColor: "#ffffff",
-      borderWidth: 1.5,
-      borderColor: "#e2e8f0",
-      marginRight: 10,
-    },
-    categoryBtnActive: { backgroundColor: "#16a34a", borderColor: "#16a34a" },
-    categoryText: { fontSize: 13, fontWeight: "600", color: "#374151" },
-    categoryTextActive: { color: "#ffffff" },
-    washroomNote: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      backgroundColor: "#eff6ff",
-      borderRadius: 10,
-      padding: 12,
-      marginTop: 8,
-      marginBottom: 4,
-      borderWidth: 1,
-      borderColor: "#bfdbfe",
-    },
-    washroomNoteText: {
-      fontSize: 12,
-      color: "#1d4ed8",
-      lineHeight: 18,
-      fontWeight: "500",
-      flex: 1,
-    },
-    subIssuesContainer: { marginBottom: 4 },
-    subIssuesTitle: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: "#374151",
-      marginBottom: 8,
-      marginTop: 18,
-    },
-    subIssueBtn: {
-      backgroundColor: "#f8fafc",
-      borderRadius: 20,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      marginRight: 8,
-      borderWidth: 1.5,
-      borderColor: "#e2e8f0",
-    },
-    subIssueBtnActive: { backgroundColor: "#f0fdf4", borderColor: "#16a34a" },
-    subIssueText: { fontSize: 13, color: "#374151", fontWeight: "500" },
-    subIssueTextActive: { color: "#16a34a", fontWeight: "700" },
-    locationTitle: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: "#374151",
-      marginBottom: 8,
-      marginTop: 18,
-    },
-    roomInputContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: "#ffffff",
-      borderRadius: 10,
-      borderWidth: 1.5,
-      borderColor: "#e2e8f0",
-      paddingHorizontal: 12,
-    },
-    roomInputContainerValid: {
-      borderColor: "#16a34a",
-      backgroundColor: "#f0fdf4",
-    },
-    roomInputContainerError: { borderColor: "#ef4444" },
-    roomInputIcon: { marginRight: 8 },
-    roomInput: { flex: 1, fontSize: 14, color: "#0f172a", paddingVertical: 13 },
-    resolvedRoomContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: "#f0fdf4",
-      borderRadius: 8,
-      padding: 10,
-      marginTop: 6,
-      borderWidth: 1,
-      borderColor: "#bbf7d0",
-    },
-    resolvedRoomText: { fontSize: 13, color: "#16a34a", fontWeight: "600" },
-    errorContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: "#fef2f2",
-      borderRadius: 8,
-      padding: 10,
-      marginTop: 6,
-      borderWidth: 1,
-      borderColor: "#fecaca",
-    },
-    errorText: { fontSize: 12, color: "#dc2626" },
-    descriptionTitle: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: "#374151",
-      marginBottom: 8,
-      marginTop: 18,
-    },
-    descriptionInput: {
-      backgroundColor: "#ffffff",
-      borderRadius: 10,
-      paddingHorizontal: 14,
-      paddingVertical: 13,
-      fontSize: 14,
-      color: "#0f172a",
-      borderWidth: 1.5,
-      borderColor: "#e2e8f0",
-      height: 110,
-      textAlignVertical: "top",
-    },
-    photoTitle: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: "#374151",
-      marginBottom: 8,
-      marginTop: 18,
-    },
-    photoButton: {
-      backgroundColor: "#ffffff",
-      borderRadius: 10,
-      borderWidth: 1.5,
-      borderColor: "#e2e8f0",
-      borderStyle: "dashed",
-      paddingVertical: 28,
-      paddingHorizontal: 20,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    photoPreview: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-      width: "100%",
-    },
-    photoPreviewIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 10,
-      backgroundColor: "#f0fdf4",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    photoPreviewName: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: "#0f172a",
-      flex: 1,
-    },
-    photoPreviewStatus: { fontSize: 12, color: "#16a34a", marginTop: 2 },
-    photoPreviewChange: { color: "#16a34a", fontSize: 13, fontWeight: "700" },
-    photoPlaceholder: { alignItems: "center", gap: 10 },
-    photoPlaceholderIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: "#f1f5f9",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    photoPlaceholderText: { fontSize: 13, color: "#94a3b8", fontWeight: "500" },
-    submitButton: {
-      backgroundColor: "#16a34a",
-      borderRadius: 12,
-      paddingVertical: 16,
-      alignItems: "center",
-      justifyContent: "center",
-      flexDirection: "row",
-      gap: 8,
-      marginTop: 28,
-    },
-    submitButtonDisabled: { opacity: 0.55 },
-    submitButtonText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-    footerText: {
-      textAlign: "center",
-      fontSize: 12,
-      color: "#94a3b8",
-      marginTop: 14,
-    },
-  });
 
   return (
     <View style={styles.container}>
@@ -671,7 +439,7 @@ export default function ReportSection({
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
+              <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={onBackToHome} style={styles.backButton}>
               <Ionicons name="arrow-back" size={18} color="#0f172a" />
@@ -951,4 +719,236 @@ export default function ReportSection({
       </ScrollView>
     </View>
   );
-}
+});
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#ffffff" },
+  header: {
+    backgroundColor: "#e8f5e9",
+    marginHorizontal: -20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 16,
+    },
+    backButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      backgroundColor: "rgba(255,255,255,0.7)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    headerTitle: { fontSize: 16, fontWeight: "700", color: "#0f172a" },
+    progressContainer: { flexDirection: "row", gap: 6, marginBottom: 16 },
+    progressDot: { width: 32, height: 5, borderRadius: 3 },
+    progressDotActive: { backgroundColor: "#16a34a" },
+    progressDotInactive: { backgroundColor: "#a7d7a9" },
+    mainTitle: {
+      fontSize: 24,
+      fontWeight: "800",
+      color: "#0f172a",
+      marginBottom: 6,
+      letterSpacing: -0.3,
+    },
+    subText: { fontSize: 13, color: "#4b5563", lineHeight: 20 },
+    sectionLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#16a34a",
+      letterSpacing: 1,
+      marginBottom: 12,
+      marginTop: 4,
+    },
+    categoryScroll: { marginBottom: 4 },
+    categoryBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: 24,
+      backgroundColor: "#ffffff",
+      borderWidth: 1.5,
+      borderColor: "#e2e8f0",
+      marginRight: 10,
+    },
+    categoryBtnActive: { backgroundColor: "#16a34a", borderColor: "#16a34a" },
+    categoryText: { fontSize: 13, fontWeight: "600", color: "#374151" },
+    categoryTextActive: { color: "#ffffff" },
+    washroomNote: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      backgroundColor: "#eff6ff",
+      borderRadius: 10,
+      padding: 12,
+      marginTop: 8,
+      marginBottom: 4,
+      borderWidth: 1,
+      borderColor: "#bfdbfe",
+    },
+    washroomNoteText: {
+      fontSize: 12,
+      color: "#1d4ed8",
+      lineHeight: 18,
+      fontWeight: "500",
+      flex: 1,
+    },
+    subIssuesContainer: { marginBottom: 4 },
+    subIssuesTitle: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: "#374151",
+      marginBottom: 8,
+      marginTop: 18,
+    },
+    subIssueBtn: {
+      backgroundColor: "#f8fafc",
+      borderRadius: 20,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      marginRight: 8,
+      borderWidth: 1.5,
+      borderColor: "#e2e8f0",
+    },
+    subIssueBtnActive: { backgroundColor: "#f0fdf4", borderColor: "#16a34a" },
+    subIssueText: { fontSize: 13, color: "#374151", fontWeight: "500" },
+    subIssueTextActive: { color: "#16a34a", fontWeight: "700" },
+    locationTitle: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: "#374151",
+      marginBottom: 8,
+      marginTop: 18,
+    },
+    roomInputContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#ffffff",
+      borderRadius: 10,
+      borderWidth: 1.5,
+      borderColor: "#e2e8f0",
+      paddingHorizontal: 12,
+    },
+    roomInputContainerValid: {
+      borderColor: "#16a34a",
+      backgroundColor: "#f0fdf4",
+    },
+    roomInputContainerError: { borderColor: "#ef4444" },
+    roomInputIcon: { marginRight: 8 },
+    roomInput: { flex: 1, fontSize: 14, color: "#0f172a", paddingVertical: 13 },
+    resolvedRoomContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#f0fdf4",
+      borderRadius: 8,
+      padding: 10,
+      marginTop: 6,
+      borderWidth: 1,
+      borderColor: "#bbf7d0",
+    },
+    resolvedRoomText: { fontSize: 13, color: "#16a34a", fontWeight: "600" },
+    errorContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#fef2f2",
+      borderRadius: 8,
+      padding: 10,
+      marginTop: 6,
+      borderWidth: 1,
+      borderColor: "#fecaca",
+    },
+    errorText: { fontSize: 12, color: "#dc2626" },
+    descriptionTitle: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: "#374151",
+      marginBottom: 8,
+      marginTop: 18,
+    },
+    descriptionInput: {
+      backgroundColor: "#ffffff",
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      fontSize: 14,
+      color: "#0f172a",
+      borderWidth: 1.5,
+      borderColor: "#e2e8f0",
+      height: 110,
+      textAlignVertical: "top",
+    },
+    photoTitle: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: "#374151",
+      marginBottom: 8,
+      marginTop: 18,
+    },
+    photoButton: {
+      backgroundColor: "#ffffff",
+      borderRadius: 10,
+      borderWidth: 1.5,
+      borderColor: "#e2e8f0",
+      borderStyle: "dashed",
+      paddingVertical: 28,
+      paddingHorizontal: 20,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    photoPreview: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      width: "100%",
+    },
+    photoPreviewIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 10,
+      backgroundColor: "#f0fdf4",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    photoPreviewName: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: "#0f172a",
+      flex: 1,
+    },
+    photoPreviewStatus: { fontSize: 12, color: "#16a34a", marginTop: 2 },
+    photoPreviewChange: { color: "#16a34a", fontSize: 13, fontWeight: "700" },
+    photoPlaceholder: { alignItems: "center", gap: 10 },
+    photoPlaceholderIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: "#f1f5f9",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    photoPlaceholderText: { fontSize: 13, color: "#94a3b8", fontWeight: "500" },
+    submitButton: {
+      backgroundColor: "#16a34a",
+      borderRadius: 12,
+      paddingVertical: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 28,
+    },
+    submitButtonDisabled: { opacity: 0.55 },
+    submitButtonText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+    footerText: {
+      textAlign: "center",
+      fontSize: 12,
+      color: "#94a3b8",
+      marginTop: 14,
+    },
+  });

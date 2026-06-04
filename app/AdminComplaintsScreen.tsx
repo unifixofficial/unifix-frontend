@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useEffect } from "react";
+import React, { useRef, useState, useMemo, useEffect, useCallback, memo } from "react";
 import {
   Alert,
   Image,
@@ -125,7 +125,7 @@ function ImageZoom({ uri }: { uri: string }) {
     </View>
   );
 }
-export function ComplaintDetailModal({ complaint, visible, onClose, onIWillHandle, onMarkResolved, actionLoading }: {
+export const ComplaintDetailModal = memo(function ComplaintDetailModal({ complaint, visible, onClose, onIWillHandle, onMarkResolved, actionLoading }: {
   complaint: any;
   visible: boolean;
   onClose: () => void;
@@ -136,39 +136,39 @@ export function ComplaintDetailModal({ complaint, visible, onClose, onIWillHandl
 const [imageModal, setImageModal] = useState(false);
 const [rejectedByDetails, setRejectedByDetails] = useState<Record<string, any>>({});
 
-useEffect(() => {
+const fetchStaffDetails = useCallback(async () => {
   if (!visible || !complaint?.rejectedBy?.length) return;
-  setRejectedByDetails({});
-  const fetchStaffDetails = async () => {
-    const details: Record<string, any> = {};
-    for (const r of complaint.rejectedBy) {
-      if (!r.uid) continue;
-      try {
-        const base = process.env.EXPO_PUBLIC_BASE_URL;
-        const loginRes = await fetch(`${base}/admin/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: process.env.EXPO_PUBLIC_ADMIN_EMAIL,
-            password: process.env.EXPO_PUBLIC_ADMIN_PASSWORD,
-          }),
-        });
-        const loginData = await loginRes.json();
-        if (!loginData.success) continue;
+  const details: Record<string, any> = {};
+  for (const r of complaint.rejectedBy) {
+    if (!r.uid) continue;
+    try {
+      const base = process.env.EXPO_PUBLIC_BASE_URL;
+      const loginRes = await fetch(`${base}/admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: process.env.EXPO_PUBLIC_ADMIN_EMAIL,
+          password: process.env.EXPO_PUBLIC_ADMIN_PASSWORD,
+        }),
+      });
+      const loginData = await loginRes.json();
+      if (!loginData.success) continue;
 
-        const res = await fetch(`${base}/admin/user/${r.uid}`, {
-          headers: { Authorization: `Bearer ${loginData.token}` },
-        });
-        const data = await res.json();
-        if (data.success && data.user) details[r.uid] = data.user;
-      } catch (e) {
-        console.log("Error fetching staff:", e);
-      }
+      const res = await fetch(`${base}/admin/user/${r.uid}`, {
+        headers: { Authorization: `Bearer ${loginData.token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.user) details[r.uid] = data.user;
+    } catch (e) {
+      console.log("Error fetching staff:", e);
     }
-    setRejectedByDetails(details);
-  };
+  }
+  setRejectedByDetails(details);
+}, [visible, complaint?.rejectedBy, complaint?.id]);
+
+useEffect(() => {
   fetchStaffDetails();
-}, [visible, complaint?.id]);
+}, [fetchStaffDetails]);
 
 if (!complaint) return null;
  const isFlagged = complaint.flagged && !complaint.flagResolved && ["pending", "assigned", "in_progress"].includes(complaint.status);
@@ -376,8 +376,7 @@ const TIMELINE = [
       </GestureHandlerRootView>
     </Modal>
   );
-}
-
+});
 interface ComplaintsScreenProps {
   allComplaints: any[];
   pendingStaff: any[];
@@ -390,7 +389,7 @@ interface ComplaintsScreenProps {
   onRefresh?: () => void;
 }
 
-export default function AdminComplaintsScreen({
+export default memo(function AdminComplaintsScreen({
   allComplaints,
   pendingStaff,
   approvingUid,
@@ -400,7 +399,7 @@ export default function AdminComplaintsScreen({
   actionLoading,
   refreshing = false,
   onRefresh,
-}: ComplaintsScreenProps){
+}: ComplaintsScreenProps) {
   const [activeFilter, setActiveFilter] = useState("All");
 const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null);
 const [modalVisible, setModalVisible] = useState(false);
@@ -409,7 +408,7 @@ const selectedComplaint = allComplaints.find((c) => c.id === selectedComplaintId
   const [searchFocused, setSearchFocused] = useState(false);
   const searchInputRef = useRef<any>(null);
 
- const filteredComplaints = allComplaints.filter((c) => {
+const filteredComplaints = useMemo(() => allComplaints.filter((c) => {
   const q = searchQuery.trim().toLowerCase();
   let statusMatch = false;
   if (activeFilter === "All") statusMatch = true;
@@ -427,29 +426,30 @@ const selectedComplaint = allComplaints.find((c) => c.id === selectedComplaintId
     const searchable = [c.submittedByName, c.submittedByEmail, c.assignedToName, c.category, c.subIssue, c.customIssue, c.description, c.location, c.roomNumber, c.floor, c.building, c.roomDetail, c.ticketId, c.submittedByRole]
       .filter(Boolean).join(" ").toLowerCase();
     return statusMatch && searchable.includes(q);
-  });
+  }), [allComplaints, activeFilter, searchQuery]);
 
-  const dynamicSuggestions = useMemo(() => {
+const dynamicSuggestions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return SEARCH_SUGGESTIONS;
     return SEARCH_SUGGESTIONS.filter((s) => s.label.toLowerCase().includes(q) || s.query.toLowerCase().includes(q));
   }, [searchQuery]);
 
-  const getSuggestionIcon = (query: string) => {
+const openTasksCount = useMemo(() => allComplaints.filter((c) => ["pending", "assigned", "in_progress"].includes(c.status)).length, [allComplaints]);
+const rejectedCount = useMemo(() => allComplaints.filter((c) => c.status === "rejected").length, [allComplaints]);
+
+const getSuggestionIcon = useCallback((query: string) => {
     if (query.startsWith("role:")) return "person";
     if (query.startsWith("flagged:")) return "flag";
     if (query.startsWith("hod:")) return "mail";
     return "search";
-  };
-
-const openTasksCount = allComplaints.filter((c) => ["pending", "assigned", "in_progress"].includes(c.status)).length;
-const rejectedCount = allComplaints.filter((c) => c.status === "rejected").length;
+  }, []);
 
 
-function openComplaint(item: any) {
+
+const openComplaint = useCallback((item: any) => {
   setSelectedComplaintId(item.id);
   setModalVisible(true);
-}
+}, []);
 
   return (
     <View style={styles.root}>
@@ -668,7 +668,7 @@ function openComplaint(item: any) {
 />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#f0fdf4" },

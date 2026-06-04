@@ -1,15 +1,15 @@
 import { useEffect, useRef } from 'react'
-import { Animated, StyleSheet, View, ScrollView, StatusBar } from 'react-native'
+import { Animated, ScrollView, StatusBar, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
-  ListSkeleton,
-  DashboardSkeleton,
-  ProfileSkeleton,
-  TaskSkeleton,
-  CardSkeleton,
-  StaffDashboardSkeleton,
   AdminDashboardSkeleton,
+  CardSkeleton,
   ComplaintSkeleton,
+  DashboardSkeleton,
+  ListSkeleton,
+  ProfileSkeleton,
+  StaffDashboardSkeleton,
+  TaskSkeleton,
 } from '../components/skeleton'
 
 type SkeletonType = 'list' | 'dashboard' | 'profile' | 'task' | 'card' | 'staff' | 'admin' | 'complaint'
@@ -61,10 +61,12 @@ export default function ScreenWrapper({
   const insets = useSafeAreaInsets()
   const skeletonOpacity = useRef(new Animated.Value(1)).current
   const contentOpacity = useRef(new Animated.Value(0)).current
-  const prevLoading = useRef(loading)
+ const prevLoading = useRef(loading)
+  const hasLoadedOnce = useRef(false)
 
   useEffect(() => {
     if (prevLoading.current === true && loading === false) {
+      hasLoadedOnce.current = true
       Animated.parallel([
         Animated.timing(skeletonOpacity, {
           toValue: 0,
@@ -79,14 +81,13 @@ export default function ScreenWrapper({
       ]).start()
     }
 
-    if (loading === true) {
+    if (loading === true && !hasLoadedOnce.current) {
       skeletonOpacity.setValue(1)
       contentOpacity.setValue(0)
     }
 
     prevLoading.current = loading
   }, [loading])
-
 
 return (
     <View style={styles.root}>

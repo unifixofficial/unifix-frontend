@@ -31,7 +31,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -68,7 +68,108 @@ async function uploadToCloudinary(
 
 const { width: SW, height: SH } = Dimensions.get("window");
 
+const LF_ROOM_MAP: Record<string, string> = {
+  "003A": "Photocopy Center",
+  "003": "First Aid / Counselling Room",
+  "004": "Conference Room",
+  "007": "Basic Workshop",
+  "008": "Machine Shop",
+  "009": "Seminar Hall",
+  "013": "Thermal Engineering Lab",
+  "014": "Theory of Machines Lab",
+  "015": "Refrigeration & AC Lab",
+  "016": "HOD Civil Engineering",
+  "017": "Geotechnics Lab",
+  "019": "Transportation Engineering Lab",
+  "020": "Fluid Mechanics Lab",
+  "021": "Applied Hydraulics Lab",
+  "022": "Basic Workshop II",
+  "023": "Material Testing Lab",
+  "024": "HOD Mechanical Engineering",
+  "101": "Administrative Office",
+  "102": "Principal's Office",
+  "112": "CAD Center",
+  "113": "Computer Lab B",
+  "114": "Networking & DevOps Lab",
+  "115": "Programming & Project Lab",
+  "117": "Environmental Engineering Lab",
+  "118": "Meeting Room",
+  "119": "Faculty Room",
+  "120": "Robotics Lab",
+  "121": "Robotics Lab",
+  "123": "Project Lab",
+  "124": "Measurement & Automation Lab",
+  "127": "Joint Director Office",
+  "201": "Cubicles / Staff Room",
+  "202": "HOD Computers",
+  "209": "HOD IT",
+  "212": "Ladies Staff Room",
+  "213": "NSS / Dept Office",
+  "214": "Classroom 1",
+  "215": "Classroom 2",
+  "216": "Classroom 3",
+  "217": "Faculty Room",
+  "218": "Classroom",
+  "219": "Computer Center",
+  "220": "Computer Center",
+  "221": "Computer Center",
+  "222": "Computer Center",
+  "223": "Computer Center",
+  "224": "Language Lab",
+  "301": "Gymkhana",
+  "302": "Gymkhana",
+  "306": "Server Room",
+  "307": "CSEDS Staff Room",
+  "312": "Tutorial Room",
+  "313": "Classroom",
+  "314": "Classroom",
+  "315": "Classroom",
+  "318": "Seminar Hall",
+  "319": "Physics Lab",
+  "320": "Classroom",
+  "321": "Classroom",
+  "322": "Chemistry Lab",
+  "323": "Classroom",
+  "401": "EXTC / VLSI Lab",
+  "402": "EXTC / VLSI Lab",
+  "406": "HOD EXTC Cabin",
+  "414": "Tutorial Room",
+  "415": "Classroom",
+  "416": "Classroom",
+  "417": "Classroom",
+  "420": "Classroom",
+  "421": "Drawing Hall",
+  "422": "Classroom",
+  "423": "Classroom",
+  "501": "Staff Room",
+  "502": "Staff Room",
+  "503": "Staff Room",
+  "515": "Classroom",
+  "516": "Classroom",
+  "517": "Classroom",
+  "518": "MMS Staff Room",
+  "519": "Classroom",
+  "520": "Classroom",
+  "527": "Student Activity Room",
+};
+
+const SECURITY_ISSUE_TYPES = [
+  "Unauthorized Access",
+  "Account Compromise",
+  "Data Privacy Concern",
+  "Suspicious Activity",
+  "Password Issue",
+  "Other",
+];
+
+const LF_CATEGORIES_FOUND = [
+  "Electronics", "Clothing", "Stationery", "ID Card", "Keys",
+  "Bag", "Water Bottle", "Earphones", "Books", "Others",
+];
+
 const CAT_ICON_MAP: Record<string, keyof typeof Ionicons.glyphMap> = {
+
+
   electrical: "flash-outline",
   plumbing: "water-outline",
   carpentry: "hammer-outline",
@@ -309,7 +410,7 @@ const iv = StyleSheet.create({
   image: { width: SW, height: SH },
 });
 
-export default function StaffDashboardScreen() {
+export default memo(function StaffDashboardScreen() {
   const insets = useSafeAreaInsets();
   const { openComplaintId, openTab, openLFTab } = useLocalSearchParams<{
     openComplaintId?: string;
@@ -396,16 +497,9 @@ export default function StaffDashboardScreen() {
   const unsubRef = useRef<(() => void) | null>(null);
   const pendingOpenComplaintId = useRef<string | null>(null);
 
-  const SECURITY_ISSUE_TYPES = [
-    "Unauthorized Access",
-    "Account Compromise",
-    "Data Privacy Concern",
-    "Suspicious Activity",
-    "Password Issue",
-    "Other",
-  ];
 
-  const showToast = (
+
+  const showToast = useCallback((
     message: string,
     type: "success" | "error" | "info" = "success",
   ) => {
@@ -425,8 +519,7 @@ export default function StaffDashboardScreen() {
         useNativeDriver: true,
       }).start(() => setToast(null));
     }, 3000);
-  };
-
+  }, [toastAnim]);
   const subscribeToComplaints = useCallback((uid: string) => {
     if (unsubRef.current) unsubRef.current();
 
@@ -542,105 +635,9 @@ export default function StaffDashboardScreen() {
     }
   }, []);
 
-  const LF_ROOM_MAP: Record<string, string> = {
-    "003A": "Photocopy Center",
-    "003": "First Aid / Counselling Room",
-    "004": "Conference Room",
-    "007": "Basic Workshop",
-    "008": "Machine Shop",
-    "009": "Seminar Hall",
-    "013": "Thermal Engineering Lab",
-    "014": "Theory of Machines Lab",
-    "015": "Refrigeration & AC Lab",
-    "016": "HOD Civil Engineering",
-    "017": "Geotechnics Lab",
-    "019": "Transportation Engineering Lab",
-    "020": "Fluid Mechanics Lab",
-    "021": "Applied Hydraulics Lab",
-    "022": "Basic Workshop II",
-    "023": "Material Testing Lab",
-    "024": "HOD Mechanical Engineering",
-    "101": "Administrative Office",
-    "102": "Principal's Office",
-    "112": "CAD Center",
-    "113": "Computer Lab B",
-    "114": "Networking & DevOps Lab",
-    "115": "Programming & Project Lab",
-    "117": "Environmental Engineering Lab",
-    "118": "Meeting Room",
-    "119": "Faculty Room",
-    "120": "Robotics Lab",
-    "121": "Robotics Lab",
-    "123": "Project Lab",
-    "124": "Measurement & Automation Lab",
-    "127": "Joint Director Office",
-    "201": "Cubicles / Staff Room",
-    "202": "HOD Computers",
-    "209": "HOD IT",
-    "212": "Ladies Staff Room",
-    "213": "NSS / Dept Office",
-    "214": "Classroom 1",
-    "215": "Classroom 2",
-    "216": "Classroom 3",
-    "217": "Faculty Room",
-    "218": "Classroom",
-    "219": "Computer Center",
-    "220": "Computer Center",
-    "221": "Computer Center",
-    "222": "Computer Center",
-    "223": "Computer Center",
-    "224": "Language Lab",
-    "301": "Gymkhana",
-    "302": "Gymkhana",
-    "306": "Server Room",
-    "307": "CSEDS Staff Room",
-    "312": "Tutorial Room",
-    "313": "Classroom",
-    "314": "Classroom",
-    "315": "Classroom",
-    "318": "Seminar Hall",
-    "319": "Physics Lab",
-    "320": "Classroom",
-    "321": "Classroom",
-    "322": "Chemistry Lab",
-    "323": "Classroom",
-    "401": "EXTC / VLSI Lab",
-    "402": "EXTC / VLSI Lab",
-    "406": "HOD EXTC Cabin",
-    "414": "Tutorial Room",
-    "415": "Classroom",
-    "416": "Classroom",
-    "417": "Classroom",
-    "420": "Classroom",
-    "421": "Drawing Hall",
-    "422": "Classroom",
-    "423": "Classroom",
-    "501": "Staff Room",
-    "502": "Staff Room",
-    "503": "Staff Room",
-    "515": "Classroom",
-    "516": "Classroom",
-    "517": "Classroom",
-    "518": "MMS Staff Room",
-    "519": "Classroom",
-    "520": "Classroom",
-    "527": "Student Activity Room",
-  };
 
-  const LF_CATEGORIES_FOUND = [
-    "Electronics",
-    "Clothing",
-    "Stationery",
-    "ID Card",
-    "Keys",
-    "Bag",
-    "Water Bottle",
-    "Earphones",
-    "Books",
-    "Others",
-  ];
 
-  const handlePostFoundRoomInput = (val: string) => {
+  const handlePostFoundRoomInput = useCallback((val: string) => {
     setPostFoundRoomInput(val);
     setPostFoundRoomError("");
     if (!val.trim()) {
@@ -653,9 +650,8 @@ export default function StaffDashboardScreen() {
       setPostFoundResolvedRoom(null);
       if (val.trim().length >= 3) setPostFoundRoomError("Invalid room number.");
     }
-  };
-
-  const handlePostFoundPickPhoto = async () => {
+  }, []);
+  const handlePostFoundPickPhoto = useCallback(async () => {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) return;
@@ -671,9 +667,9 @@ export default function StaffDashboardScreen() {
         name: asset.uri.split("/").pop() || `lostfound_${Date.now()}.jpg`,
       });
     } catch {}
-  };
+  }, []);
 
-  const resetPostFoundForm = () => {
+  const resetPostFoundForm = useCallback(() => {
     setPostFoundItemName("");
     setPostFoundCategory("Others");
     setPostFoundDescription("");
@@ -685,9 +681,9 @@ export default function StaffDashboardScreen() {
     setPostFoundError("");
     setPostFoundSubmitting(false);
     setPostFoundUploadingPhoto(false);
-  };
+  }, []);
 
-  const handlePostFoundSubmit = async () => {
+  const handlePostFoundSubmit = useCallback(async () => {
     setPostFoundError("");
     if (!postFoundItemName.trim())
       return setPostFoundError("Please enter the item name.");
@@ -736,7 +732,7 @@ export default function StaffDashboardScreen() {
       setPostFoundSubmitting(false);
       setPostFoundUploadingPhoto(false);
     }
-  };
+  }, [postFoundItemName, postFoundResolvedRoom, postFoundCollectLocation, postFoundPhoto, postFoundCategory, postFoundDescription, postFoundRoomInput, staffUid, fetchLostFound, resetPostFoundForm]);
 
   const registerPushToken = useCallback(async () => {
     try {
@@ -809,15 +805,15 @@ export default function StaffDashboardScreen() {
     }
   };
 
-  const handleCall = (phone?: string) => {
+  const handleCall = useCallback((phone?: string) => {
     if (!phone?.trim()) {
       showToast("No phone number available.", "info");
       return;
     }
     Linking.openURL(`tel:${phone.trim()}`);
-  };
+  }, [showToast]);
 
-  const handleAccept = async (complaintId: string) => {
+  const handleAccept = useCallback(async (complaintId: string) => {
     setActionLoading(complaintId);
     try {
       await complaintsAPI.accept(complaintId);
@@ -828,16 +824,16 @@ export default function StaffDashboardScreen() {
     } finally {
       setActionLoading(null);
     }
-  };
+  }, [showToast]);
 
-  const openRejectModal = (complaintId: string) => {
+  const openRejectModal = useCallback((complaintId: string) => {
     setRejectTarget(complaintId);
     setRejectReason("");
     setDetailVisible(false);
     setRejectVisible(true);
-  };
+  }, []);
 
-  const handleReject = async () => {
+  const handleReject = useCallback(async () => {
     if (!rejectReason.trim()) {
       showToast("Please enter a rejection reason.", "error");
       return;
@@ -854,9 +850,9 @@ export default function StaffDashboardScreen() {
     } finally {
       setActionLoading(null);
     }
-  };
+  }, [rejectReason, rejectTarget, showToast]);
 
-  const handleUpdateStatus = async (complaintId: string, status: string) => {
+  const handleUpdateStatus = useCallback(async (complaintId: string, status: string) => {
     setActionLoading(complaintId);
     try {
       await complaintsAPI.updateStatus(complaintId, status);
@@ -867,8 +863,7 @@ export default function StaffDashboardScreen() {
     } finally {
       setActionLoading(null);
     }
-  };
-
+  }, [showToast]);
   const handleHandover = async () => {
     if (!handedToName.trim()) {
       setHandoverError("Please enter the name.");
@@ -888,7 +883,7 @@ export default function StaffDashboardScreen() {
       setHandoverLoading(false);
     }
   };
-  const handlePickPhoto = async () => {
+  const handlePickPhoto = useCallback(async () => {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) return;
@@ -913,9 +908,8 @@ export default function StaffDashboardScreen() {
     } finally {
       setPhotoUploading(false);
     }
-  };
-
-  const handleSaveProfile = async () => {
+  }, []);
+  const handleSaveProfile = useCallback(async () => {
     setProfileError("");
     setProfileSuccess("");
     if (!editName.trim()) {
@@ -947,9 +941,8 @@ export default function StaffDashboardScreen() {
     } finally {
       setProfileSaving(false);
     }
-  };
-
-  const handleChangePassword = async () => {
+  }, [editName, editPhone]);
+  const handleChangePassword = useCallback(async () => {
     setPwError("");
     setPwSuccess("");
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -984,9 +977,8 @@ export default function StaffDashboardScreen() {
     } finally {
       setPwLoading(false);
     }
-  };
-
-  const handleLogoutAllDevices = () => {
+  }, [currentPassword, newPassword, confirmPassword]);
+  const handleLogoutAllDevices = useCallback(() => {
     Alert.alert("Logout All Devices", "This will end all active sessions.", [
       { text: "Cancel", style: "cancel" },
       {
@@ -1001,9 +993,8 @@ export default function StaffDashboardScreen() {
         },
       },
     ]);
-  };
-
-  const handleDeleteAccount = () => {
+  }, [router]);
+  const handleDeleteAccount = useCallback(() => {
     Alert.alert(
       "Delete Account",
       "Your deletion request will be sent to admin for approval.",
@@ -1027,9 +1018,8 @@ export default function StaffDashboardScreen() {
         },
       ],
     );
-  };
-
-  const handleSubmitSecurityIssue = async () => {
+  }, []);
+   const handleSubmitSecurityIssue = useCallback(async () => {
     setSecurityError("");
     setSecuritySuccess("");
     if (!securityIssueType) {
@@ -1054,45 +1044,44 @@ export default function StaffDashboardScreen() {
     } finally {
       setSecurityLoading(false);
     }
-  };
-
+  }, [securityIssueType, securityDescription]);
   const uid = staffUid ?? "";
-  const pending = allComplaints.filter(
+  const pending = useMemo(() => allComplaints.filter(
     (c) =>
       c.status === "pending" &&
       Array.isArray(c.assignableTo) &&
       c.assignableTo.includes(uid),
-  );
-  const active = allComplaints.filter(
+  ), [allComplaints, uid]);
+  const active = useMemo(() => allComplaints.filter(
     (c) =>
       (c.status === "assigned" || c.status === "in_progress") &&
       c.assignedTo === uid,
-  );
-  const completed = allComplaints.filter(
+  ), [allComplaints, uid]);
+  const completed = useMemo(() => allComplaints.filter(
     (c) => c.status === "completed" && c.assignedTo === uid,
-  );
-  const rejected = allComplaints.filter(
+  ), [allComplaints, uid]);
+  const rejected = useMemo(() => allComplaints.filter(
     (c) =>
       Array.isArray(c.rejectedBy) && c.rejectedBy.some((r) => r.uid === uid),
-  );
+  ), [allComplaints, uid]);
 
-  const inProgress = allComplaints.filter(
+  const inProgress = useMemo(() => allComplaints.filter(
     (c) => c.status === "in_progress" && c.assignedTo === uid,
-  );
-  const assigned = allComplaints.filter(
+  ), [allComplaints, uid]);
+  const assigned = useMemo(() => allComplaints.filter(
     (c) => c.status === "assigned" && c.assignedTo === uid,
-  );
-  const allTasks = [...inProgress, ...assigned, ...pending];
-  const today = new Date().toLocaleDateString("en-US", {
+  ), [allComplaints, uid]);
+  const allTasks = useMemo(() => [...inProgress, ...assigned, ...pending], [inProgress, assigned, pending]);
+  const today = useMemo(() => new Date().toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
-  });
-  const firstName = staffData?.fullName?.split(" ")[0] ?? "Team";
-  const bottomNavHeight = 60 + insets.bottom;
+  }), []);
+  const firstName = useMemo(() => staffData?.fullName?.split(" ")[0] ?? "Team", [staffData?.fullName]);
+  const bottomNavHeight = useMemo(() => 60 + insets.bottom, [insets.bottom]);
 
-  const STAT_ITEMS = [
+  const STAT_ITEMS = useMemo(() => [
     {
       iconName: "clipboard-outline" as keyof typeof Ionicons.glyphMap,
       iconBg: "#f0fdf4",
@@ -1132,7 +1121,7 @@ export default function StaffDashboardScreen() {
           : "No ratings yet",
       subColor: "#f59e0b",
     },
-  ];
+  ], [pending.length, active, completed.length, avgRating, ratingCount]);
 
   const renderTaskCard = (c: Complaint) => {
     const sc = STATUS_CONFIG[c.status] || STATUS_CONFIG.pending;
@@ -2022,13 +2011,13 @@ export default function StaffDashboardScreen() {
     </KeyboardAvoidingView>
   );
 
-  const BOTTOM_TABS: {
+  const BOTTOM_TABS = useMemo<{
     key: TabType;
     iconName: keyof typeof Ionicons.glyphMap;
     iconActive: keyof typeof Ionicons.glyphMap;
     label: string;
     badge?: number;
-  }[] = [
+  }[]>(() => [
     {
       key: "tasks",
       iconName: "clipboard-outline",
@@ -2054,7 +2043,7 @@ export default function StaffDashboardScreen() {
       iconActive: "person-circle",
       label: "Profile",
     },
-  ];
+  ], [pending.length]);
 
   return (
     <ScreenWrapper
@@ -3274,7 +3263,7 @@ export default function StaffDashboardScreen() {
       </View>
     </ScreenWrapper>
   );
-}
+});
 
 const s = StyleSheet.create({
   loader: {
