@@ -16,7 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.unifix.app"
     },
-"android": {
+    "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -24,7 +24,11 @@
       "package": "com.unifix.app",
       "googleServicesFile": "./google-services.json",
       "jsEngine": "hermes",
-      "allowBackup": false
+      "allowBackup": false,
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -46,16 +50,26 @@
           "color": "#10b981",
           "sounds": []
         }
-      ]
+      ],
+      "expo-sqlite",
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "updates": {
+      "url": "https://u.expo.dev/4d7d0e4b-d763-41e9-833b-843af45047c7"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     },
     "extra": {
       "router": {},
       "eas": {
         "projectId": "4d7d0e4b-d763-41e9-833b-843af45047c7"
       }
-    }
+    },
+    "owner": "unifix-official"
   }
 }

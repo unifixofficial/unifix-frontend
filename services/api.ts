@@ -1,11 +1,39 @@
-import { auth } from "../firebase/firebaseConfig";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const BASE_URL = process.env.EXPO_PUBLIC_BASE_URL;
 
 const getToken = async (): Promise<string> => {
-  const user = auth.currentUser;
-  if (!user) throw new Error("Not authenticated");
-  return await user.getIdToken();
+  const token = await AsyncStorage.getItem("unifix_access_token");
+  if (!token) throw new Error("Not authenticated");
+  return token;
+};
+
+const refreshAccessToken = async (): Promise<string> => {
+  const refreshToken = await AsyncStorage.getItem("unifix_refresh_token");
+  if (!refreshToken) throw new Error("SESSION_EXPIRED");
+
+  const res = await fetch(`${BASE_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
+  });
+
+  if (!res.ok) {
+    await AsyncStorage.multiRemove([
+      "unifix_access_token",
+      "unifix_refresh_token",
+      "unifix_cached_user",
+      "unifix_active_tab",
+      "unifix_staff_active_tab",
+      "unifix_admin_active_tab",
+    ]);
+    throw new Error("SESSION_EXPIRED");
+  }
+
+  const data = await res.json();
+  await AsyncStorage.setItem("unifix_access_token", data.data.token);
+  await AsyncStorage.setItem("unifix_refresh_token", data.data.refreshToken);
+  return data.data.token;
 };
 
 const request = async (
@@ -29,19 +57,46 @@ const request = async (
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  let data: any;
+  if (res.status === 401 && requiresAuth) {
+    try {
+      const freshToken = await refreshAccessToken();
+      headers["Authorization"] = `Bearer ${freshToken}`;
+      const retry = await fetch(`${BASE_URL}${endpoint}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      if (retry.status === 401) {
+        await AsyncStorage.multiRemove([
+          "unifix_access_token",
+          "unifix_refresh_token",
+          "unifix_cached_user",
+          "unifix_active_tab",
+          "unifix_staff_active_tab",
+          "unifix_admin_active_tab",
+        ]);
+        throw new Error("SESSION_EXPIRED");
+      }
+
+      const retryType = retry.headers.get("content-type");
+      const retryData = retryType?.includes("application/json")
+        ? await retry.json()
+        : { message: await retry.text() };
+
+      if (!retry.ok) throw new Error(retryData?.error || retryData?.message || "Request failed");
+      return retryData;
+    } catch (err: any) {
+      throw err;
+    }
+  }
+
   const contentType = res.headers.get("content-type");
-  if (contentType && contentType.includes("application/json")) {
-    data = await res.json();
-  } else {
-    const text = await res.text();
-    data = { message: text };
-  }
+  const data = contentType?.includes("application/json")
+    ? await res.json()
+    : { message: await res.text() };
 
-  if (!res.ok) {
-    throw new Error(data?.error || data?.message || "Request failed");
-  }
-
+  if (!res.ok) throw new Error(data?.error || data?.message || "Request failed");
   return data;
 };
 
@@ -71,6 +126,9 @@ export const authAPI = {
   verifyResetOtp: (email: string, otp: string, newPassword: string) =>
     post("/auth/verify-reset-otp", { email, otp, newPassword }, false),
 
+  refreshToken: (refreshToken: string) =>
+    post("/auth/refresh", { refreshToken }, false),
+
   changePassword: (currentPassword: string, newPassword: string) =>
     post("/auth/change-password", { currentPassword, newPassword }),
 
@@ -89,7 +147,7 @@ export const authAPI = {
 
   myProfile: () => get("/auth/my-profile"),
 
- savePushToken: (expoPushToken: string) =>
+  savePushToken: (expoPushToken: string) =>
     post("/auth/save-push-token", { expoPushToken }),
 
   reportRagging: (payload: {
@@ -126,17 +184,35 @@ export const complaintsAPI = {
     post("/complaints/rate", { complaintId, rating, comment }),
 
   myComplaints: () => get("/complaints/my-complaints"),
+  myComplaintsSince: (since: number | null) =>
+    get(`/complaints/my-complaints${since ? `?since=${since}` : ""}`),
+  getHash: () => get("/complaints/my-complaints/hash"),
+  allComplaintsSince: (since: number | null) =>
+    get(`/admin/all-complaints${since ? `?since=${since}` : ""}`),
+  getAdminHash: () => get("/admin/all-complaints/hash"),
 
   staffComplaints: () => get("/complaints/staff-complaints"),
+  staffComplaintsSince: (since: number | null) =>
+    get(`/complaints/staff-complaints${since ? `?since=${since}` : ""}`),
+  getStaffHash: () => get("/complaints/staff-complaints/hash"),
+  getById: (id: string) => get(`/complaints/${id}`),
 };
 
 export const lostFoundAPI = {
   feed: (cursor?: string) =>
     get(`/lost-found/feed?limit=10${cursor ? `&after=${cursor}` : ""}`),
+  feedSince: (since: number | null) =>
+    get(`/lost-found/feed${since ? `?since=${since}` : ""}`),
+  getFeedHash: () => get("/lost-found/feed/hash"),
 
   myPosts: () => get("/lost-found/my-posts"),
+  myPostsSince: (since: number | null) =>
+    get(`/lost-found/my-posts${since ? `?since=${since}` : ""}`),
 
   claims: () => get("/lost-found/claims"),
+  claimsSince: (since: number | null) =>
+    get(`/lost-found/claims${since ? `?since=${since}` : ""}`),
+  getClaimsHash: () => get("/lost-found/claims/hash"),
 
   postItem: (payload: {
     itemName: string;
@@ -150,11 +226,17 @@ export const lostFoundAPI = {
 
   handover: (itemId: string, handedToName: string) =>
     post("/lost-found/handover", { itemId, handedToName }),
+
+  deletePost: (itemId: string) =>
+    request("DELETE", `/lost-found/${itemId}`, undefined),
 };
 
 export const lostReportsAPI = {
   feed: (cursor?: string) =>
     get(`/lost-reports/feed?limit=10${cursor ? `&after=${cursor}` : ""}`),
+  feedSince: (since: number | null) =>
+    get(`/lost-reports/feed${since ? `?since=${since}` : ""}`),
+  getFeedHash: () => get("/lost-reports/feed/hash"),
 
   post: (payload: {
     itemName: string;
@@ -165,7 +247,6 @@ export const lostReportsAPI = {
     howToReach: string;
     images: string[];
   }) => request("POST", "/lost-reports/post", payload),
-
 
   markFound: (id: string) => request("PATCH", `/lost-reports/${id}/found`, {}),
 

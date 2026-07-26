@@ -1,10 +1,4 @@
-# Firebase
-google-services.json
-GoogleService-Info.plist
-/google-services.json
-# Firebase config files
-firebase/firebaseConfig.ts
-firebaseConfig.ts
+
 
 # Environment files
 .env
@@ -43,3 +37,6 @@ pnpm-debug.log*
 
 expo-env.d.ts
 # @end expo-cli
+
+
+google-services.json

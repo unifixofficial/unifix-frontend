@@ -13,48 +13,38 @@ export default function ComplaintSkeleton() {
         borderColor: "#f1f5f9",
       }}
     >
-      {/* Status badge row */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 10,
-        }}
-      >
-        <Skeleton colorMode="light" width={7} height={7} radius={4} />
-        <Skeleton colorMode="light" width={80} height={24} radius={8} />
+      <View style={{ flexDirection: "row", gap: 12, marginBottom: 14 }}>
+        <Skeleton colorMode="light" width={40} height={40} radius={10} />
+
+        <View style={{ flex: 1, gap: 6 }}>
+          <Skeleton colorMode="light" width="80%" height={15} radius={6} />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Skeleton colorMode="light" width={12} height={12} radius={6} />
+            <Skeleton colorMode="light" width={130} height={12} radius={6} />
+          </View>
+          <Skeleton colorMode="light" width={110} height={12} radius={6} />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Skeleton colorMode="light" width={12} height={12} radius={6} />
+            <Skeleton colorMode="light" width={90} height={12} radius={6} />
+          </View>
+          <Skeleton colorMode="light" width="90%" height={32} radius={6} />
+        </View>
+
+        <Skeleton colorMode="light" width={72} height={72} radius={10} />
       </View>
 
-      {/* Issue title */}
-      <Skeleton colorMode="light" width="85%" height={16} radius={6} />
-      <View style={{ marginTop: 8, gap: 6 }}>
-        {/* Location row */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-          <Skeleton colorMode="light" width={13} height={13} radius={6} />
-          <Skeleton colorMode="light" width={140} height={13} radius={6} />
-        </View>
-        {/* Date row */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-          <Skeleton colorMode="light" width={13} height={13} radius={6} />
-          <Skeleton colorMode="light" width={100} height={12} radius={6} />
-        </View>
-      </View>
-
-      {/* Bottom track button row */}
       <View
         style={{
           borderTopWidth: 1,
           borderTopColor: "#f1f5f9",
-          marginTop: 14,
           paddingTop: 12,
           flexDirection: "row",
           justifyContent: "space-between",
           alignItems: "center",
         }}
       >
+        <Skeleton colorMode="light" width={90} height={28} radius={8} />
         <Skeleton colorMode="light" width={100} height={13} radius={6} />
-        <Skeleton colorMode="light" width={13} height={13} radius={6} />
       </View>
     </View>
   );

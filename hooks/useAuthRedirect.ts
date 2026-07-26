@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { loadUserCache } from "@/utils/cache";
+import { authAPI } from "@/services/api";
+import NetInfo from "@react-native-community/netinfo";
 import { useRouter } from "expo-router";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../firebase/firebaseConfig";
+import { useEffect, useRef, useState } from "react";
 
 type AuthState = {
   ready: boolean;
@@ -17,47 +18,88 @@ export function useAuthRedirect(): AuthState {
     uid: null,
     role: null,
   });
+  const uidRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+    const checkAuth = async () => {
       try {
-        if (!firebaseUser) {
+        const netState = await NetInfo.fetch();
+        const online = !!(netState.isConnected && netState.isInternetReachable);
+
+        const accessToken = await AsyncStorage.getItem("unifix_access_token");
+
+        if (!accessToken) {
+          if (!online) {
+            const cached = uidRef.current ?? (await loadUserCache())?.uid ?? null;
+            if (cached) {
+              setState((prev) => ({ ...prev, ready: true }));
+              return;
+            }
+          }
           router.replace("/login");
           setState({ ready: true, uid: null, role: null });
           return;
         }
 
-        const snap = await getDoc(doc(db, "users", firebaseUser.uid));
-
-        if (!snap.exists() || !snap.data()?.profileCompleted) {
-          router.replace("/complete-profile");
-          setState({ ready: true, uid: firebaseUser.uid, role: null });
+        if (!online) {
+          const cached = await loadUserCache();
+          if (cached?.uid) {
+            uidRef.current = cached.uid;
+            setState({ ready: true, uid: cached.uid, role: cached.role ?? null });
+            return;
+          }
+          router.replace("/login");
+          setState({ ready: true, uid: null, role: null });
           return;
         }
 
-        const { role, verificationStatus } = snap.data();
+        const profileRes = await authAPI.myProfile();
+        const profile = profileRes?.data?.profile ?? profileRes?.profile ?? null;
+
+        if (!profile) {
+          router.replace("/login");
+          setState({ ready: true, uid: null, role: null });
+          return;
+        }
+
+        uidRef.current = profile.id;
+
+        if (!profile.profileCompleted) {
+          router.replace("/complete-profile");
+          setState({ ready: true, uid: profile.id, role: null });
+          return;
+        }
+
+        const { role, verificationStatus } = profile;
 
         if (role === "staff" && verificationStatus !== "approved") {
           router.replace("/complete-profile");
-          setState({ ready: true, uid: firebaseUser.uid, role });
+          setState({ ready: true, uid: profile.id, role });
           return;
         }
 
         if (role === "staff" && verificationStatus === "approved") {
           router.replace("/staff-dashboard");
-          setState({ ready: true, uid: firebaseUser.uid, role });
+          setState({ ready: true, uid: profile.id, role });
           return;
         }
 
         router.replace("/");
-        setState({ ready: true, uid: firebaseUser.uid, role });
-      } catch {
+        setState({ ready: true, uid: profile.id, role });
+      } catch (err: any) {
+        if (err?.message === "SESSION_EXPIRED") {
+          await AsyncStorage.multiRemove([
+            "unifix_access_token",
+            "unifix_refresh_token",
+            "unifix_cached_user",
+          ]);
+        }
         router.replace("/login");
         setState({ ready: true, uid: null, role: null });
       }
-    });
+    };
 
-    return () => unsub();
+    checkAuth();
   }, []);
 
   return state;
