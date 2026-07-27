@@ -18,18 +18,7 @@ import {
 
 import { authAPI } from "../../services/api";
 
-const ROOM_MAP: Record<string, string> = {
-  "003A": "Photocopy Center", "003": "First Aid / Counselling Room", "004": "Conference Room",
-  "009": "Seminar Hall", "101": "Administrative Office", "102": "Principal's Office",
-  "112": "CAD Center", "113": "Computer Lab B", "114": "Networking & DevOps Lab",
-  "201": "Cubicles / Staff Room", "202": "HOD Computers", "209": "HOD IT",
-  "214": "Classroom 1", "215": "Classroom 2", "216": "Classroom 3",
-  "219": "Computer Center", "220": "Computer Center", "221": "Computer Center",
-  "301": "Gymkhana", "307": "CSEDS Staff Room", "313": "Classroom", "314": "Classroom",
-  "315": "Classroom", "318": "Seminar Hall", "319": "Physics Lab",
-  "401": "EXTC / VLSI Lab", "415": "Classroom", "416": "Classroom",
-  "515": "Classroom", "516": "Classroom", "517": "Classroom",
-};
+
 
 function isValidDate(dateStr: string): boolean {
   const parts = dateStr.trim().split("/");
@@ -49,8 +38,7 @@ export default function ReportRaggingScreen() {
   const [dateError, setDateError] = useState("");
   const [incidentTime, setIncidentTime] = useState("");
   const [roomInput, setRoomInput] = useState("");
-  const [resolvedRoom, setResolvedRoom] = useState<string | null>(null);
-  const [roomError, setRoomError] = useState("");
+const [roomError, setRoomError] = useState("");
   const [description, setDescription] = useState("");
   const [bullyDescription, setBullyDescription] = useState("");
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -76,18 +64,10 @@ useEffect(() => {
     }
   };
 
-  const handleRoomInput = (val: string) => {
+const handleRoomInput = (val: string) => {
     setRoomInput(val);
     setRoomError("");
-    if (!val.trim()) { setResolvedRoom(null); return; }
-    const key = val.trim().toUpperCase() === "003A" ? "003A" : val.trim();
-    if (ROOM_MAP[key]) setResolvedRoom(ROOM_MAP[key]);
-    else {
-      setResolvedRoom(null);
-      if (val.trim().length >= 3) setRoomError("Invalid room. You can also type a custom location below.");
-    }
   };
-
 const locationText = roomInput.trim();
 
   const handleSubmit = async () => {
@@ -205,13 +185,13 @@ const locationText = roomInput.trim();
               onChangeText={setIncidentTime}
             />
 
-     <Text style={s.label}>Location <Text style={s.required}>*</Text></Text>
+   <Text style={s.label}>Location <Text style={s.required}>*</Text></Text>
             <TextInput
               style={s.input}
               placeholder="e.g. Near Staff Room 201, Canteen, Ground Floor Corridor"
               placeholderTextColor="#9ca3af"
               value={roomInput}
-              onChangeText={(val) => { setRoomInput(val); setRoomError(""); }}
+              onChangeText={handleRoomInput}
               autoCapitalize="sentences"
             />
           </View>

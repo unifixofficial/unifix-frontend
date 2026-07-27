@@ -18,120 +18,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { lostFoundAPI, lostReportsAPI } from "../../../services/api";
-
+import { useMasterData, getLFCategories } from "../../../hooks/useMasterData";
 const CLOUDINARY_CLOUD = "dcizaxjul";
 const CLOUDINARY_PRESET = "unifix_upload";
 const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`;
 
-const LF_CATEGORIES_FOUND = [
-  "Electronics",
-  "Clothing",
-  "Stationery",
-  "ID Card",
-  "Keys",
-  "Bag",
-  "Water Bottle",
-  "Earphones",
-  "Books",
-  "Others",
-];
-
-const LF_CATEGORIES_LOST = [
-  "Phone",
-  "Laptop",
-  "ID Card",
-  "Keys",
-  "Wallet",
-  "Bag",
-  "Bottle",
-  "Other",
-];
-
-const LF_ROOM_MAP: Record<string, string> = {
-  "003A": "Photocopy Center",
-  "003": "First Aid / Counselling Room",
-  "004": "Conference Room",
-  "007": "Basic Workshop",
-  "008": "Machine Shop",
-  "009": "Seminar Hall",
-  "013": "Thermal Engineering Lab",
-  "014": "Theory of Machines Lab",
-  "015": "Refrigeration & AC Lab",
-  "016": "HOD Civil Engineering",
-  "017": "Geotechnics Lab",
-  "019": "Transportation Engineering Lab",
-  "020": "Fluid Mechanics Lab",
-  "021": "Applied Hydraulics Lab",
-  "022": "Basic Workshop II",
-  "023": "Material Testing Lab",
-  "024": "HOD Mechanical Engineering",
-  "101": "Administrative Office",
-  "102": "Principal's Office",
-  "104": "Principal's Office",
-  "112": "CAD Center",
-  "113": "Computer Lab B",
-  "114": "Networking & DevOps Lab",
-  "115": "Programming & Project Lab",
-  "117": "Environmental Engineering Lab",
-  "118": "Meeting Room",
-  "119": "Faculty Room",
-  "120": "Robotics Lab",
-  "121": "Robotics Lab",
-  "123": "Project Lab",
-  "124": "Measurement & Automation Lab",
-  "127": "Joint Director Office",
-  "201": "Cubicles / Staff Room",
-  "202": "HOD Computers",
-  "209": "HOD IT",
-  "212": "Ladies Staff Room",
-  "213": "NSS / Dept Office",
-  "214": "Classroom 1",
-  "215": "Classroom 2",
-  "216": "Classroom 3",
-  "217": "Faculty Room",
-  "218": "Classroom",
-  "219": "Computer Center",
-  "220": "Computer Center",
-  "221": "Computer Center",
-  "222": "Computer Center",
-  "223": "Computer Center",
-  "224": "Language Lab",
-  "301": "Gymkhana",
-  "302": "Gymkhana",
-  "306": "Server Room",
-  "307": "CSEDS Staff Room",
-  "312": "Tutorial Room",
-  "313": "Classroom",
-  "314": "Classroom",
-  "315": "Classroom",
-  "318": "Seminar Hall",
-  "319": "Physics Lab",
-  "320": "Classroom",
-  "321": "Classroom",
-  "322": "Chemistry Lab",
-  "323": "Classroom",
-  "401": "EXTC / VLSI Lab",
-  "402": "EXTC / VLSI Lab",
-  "406": "HOD EXTC Cabin",
-  "414": "Tutorial Room",
-  "415": "Classroom",
-  "416": "Classroom",
-  "417": "Classroom",
-  "420": "Classroom",
-  "421": "Drawing Hall",
-  "422": "Classroom",
-  "423": "Classroom",
-  "501": "Staff Room",
-  "502": "Staff Room",
-  "503": "Staff Room",
-  "515": "Classroom",
-  "516": "Classroom",
-  "517": "Classroom",
-  "518": "MMS Staff Room",
-  "519": "Classroom",
-  "520": "Classroom",
-  "527": "Student Activity Room",
-};
 
 type LostItem = {
   id: string;
@@ -303,6 +194,9 @@ export default memo(function LostFoundSection({
   const [postLostSubmitting, setPostLostSubmitting] = useState(false);
   const [postLostUploadingPhoto, setPostLostUploadingPhoto] = useState(false);
 
+const { data: masterData } = useMasterData();
+  const LF_CATEGORIES_FOUND = getLFCategories(masterData?.lfCategories ?? [], 'found');
+  const LF_CATEGORIES_LOST = getLFCategories(masterData?.lfCategories ?? [], 'lost');
   const bottomNavHeight = 60 + insets.bottom;
 
   const handleHandover = useCallback(async () => {
@@ -323,35 +217,23 @@ export default memo(function LostFoundSection({
     }
   }, [handedToName, handoverItem, onRefresh]);
 
-  const handlePostFoundRoomInput = useCallback((val: string) => {
+const handlePostFoundRoomInput = useCallback((val: string) => {
     setPostFoundRoomInput(val);
     setPostFoundRoomError("");
-    if (!val.trim()) {
-      setPostFoundResolvedRoom(null);
-      return;
-    }
-    const key = val.trim().toUpperCase() === "003A" ? "003A" : val.trim();
-    if (LF_ROOM_MAP[key]) setPostFoundResolvedRoom({ label: LF_ROOM_MAP[key] });
-    else {
-      setPostFoundResolvedRoom(null);
-      if (val.trim().length >= 3) setPostFoundRoomError("Invalid room number.");
-    }
-  }, []);
+    if (!val.trim()) { setPostFoundResolvedRoom(null); return; }
+    const found = (masterData?.buildings ?? []).flatMap(b => b.rooms).find(r => r.roomNumber.toUpperCase() === val.trim().toUpperCase());
+    if (found) setPostFoundResolvedRoom({ label: found.roomName });
+    else { setPostFoundResolvedRoom(null); if (val.trim().length >= 3) setPostFoundRoomError("Invalid room number."); }
+  }, [masterData]);
 
   const handlePostLostRoomInput = useCallback((val: string) => {
     setPostLostRoomInput(val);
     setPostLostRoomError("");
-    if (!val.trim()) {
-      setPostLostResolvedRoom(null);
-      return;
-    }
-    const key = val.trim().toUpperCase() === "003A" ? "003A" : val.trim();
-    if (LF_ROOM_MAP[key]) setPostLostResolvedRoom({ label: LF_ROOM_MAP[key] });
-    else {
-      setPostLostResolvedRoom(null);
-      if (val.trim().length >= 3) setPostLostRoomError("Invalid room number.");
-    }
-  }, []);
+    if (!val.trim()) { setPostLostResolvedRoom(null); return; }
+    const found = (masterData?.buildings ?? []).flatMap(b => b.rooms).find(r => r.roomNumber.toUpperCase() === val.trim().toUpperCase());
+    if (found) setPostLostResolvedRoom({ label: found.roomName });
+    else { setPostLostResolvedRoom(null); if (val.trim().length >= 3) setPostLostRoomError("Invalid room number."); }
+  }, [masterData]);
 
   const handlePostLostDateInput = useCallback((val: string) => {
     let digits = val.replace(/\D/g, "");
