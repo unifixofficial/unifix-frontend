@@ -1,8 +1,19 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import Constants from "expo-constants";
+import { getAccessToken, clearAuthTokens } from '@/utils/secureAuth';
+import { loadUserCache, clearUserCache, saveUserCache } from '@/utils/cache';
+import { mmkvDelete } from '@/utils/mmkv';
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
+import {
+  getMessaging,
+  getToken,
+  requestPermission,
+  onTokenRefresh,
+  onMessage,
+  setBackgroundMessageHandler,
+  AuthorizationStatus,
+} from "@react-native-firebase/messaging";
 import { Stack, useRouter } from "expo-router";
+import * as Updates from "expo-updates";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import NetInfo from "@react-native-community/netinfo";
@@ -11,8 +22,11 @@ import {
   Animated,
   BackHandler,
   InteractionManager,
+  Modal,
   Platform,
+  Pressable,
   StyleSheet,
+  Text,
   View,
 } from "react-native";
 import { getDb } from "../db/database";
@@ -27,7 +41,6 @@ import { authAPI } from "../services/api";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
     shouldShowBanner: true,
@@ -56,17 +69,6 @@ async function registerForPushNotifications(): Promise<string | null> {
   try {
     if (!Device.isDevice) return null;
 
-    const { status: existingStatus } =
-      await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-
-    if (existingStatus !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-
-    if (finalStatus !== "granted") return null;
-
     if (Platform.OS === "android") {
       await Notifications.setNotificationChannelAsync("default", {
         name: "default",
@@ -77,17 +79,24 @@ async function registerForPushNotifications(): Promise<string | null> {
       });
     }
 
-    const projectId =
-      Constants.expoConfig?.extra?.eas?.projectId ??
-      Constants.easConfig?.projectId;
+    const m = getMessaging();
+    const authStatus = await requestPermission(m);
+    const granted =
+      authStatus === AuthorizationStatus.AUTHORIZED ||
+      authStatus === AuthorizationStatus.PROVISIONAL;
 
-    if (!projectId) {
-      console.warn("[Push] No projectId found in config");
+    if (!granted) {
+      console.warn("[Push] FCM permission not granted");
       return null;
     }
 
-    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-    return tokenData.data;
+    const fcmToken = await getToken(m);
+    if (!fcmToken) {
+      console.warn("[Push] No FCM token returned");
+      return null;
+    }
+
+    return fcmToken;
   } catch (e) {
     console.error("[Push] Registration error:", e);
     return null;
@@ -96,7 +105,9 @@ async function registerForPushNotifications(): Promise<string | null> {
 
 async function savePushTokenToServer(token: string) {
   try {
+    console.log("[Push] Registering FCM token");
     await authAPI.savePushToken(token);
+    console.log("[Push] FCM token saved successfully");
   } catch (e) {
     console.error("[Push] Save token error:", e);
   }
@@ -173,14 +184,41 @@ export default function RootLayout() {
   const showRoleOverlayRef = useRef<((role: string) => void) | null>(null);
   const [cachedRole, setCachedRole] = useState<string | null>(null);
   const currentRouteRef = useRef<string | null>(null);
-  const notificationListener = useRef<Notifications.EventSubscription | null>(
-    null
-  );
+  const notificationListener = useRef<Notifications.EventSubscription | null>(null);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateDownloaded, setUpdateDownloaded] = useState(false);
+  const [updatingApp, setUpdatingApp] = useState(false);
 
   useEffect(() => {
     if (initialRoute) currentRouteRef.current = initialRoute;
   }, [initialRoute]);
+
+  useEffect(() => {
+    if (__DEV__) return;
+    const checkForUpdates = async () => {
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          setUpdateAvailable(true);
+          const result = await Updates.fetchUpdateAsync();
+          if (result.isNew) {
+            setUpdateDownloaded(true);
+          }
+        }
+      } catch {}
+    };
+    checkForUpdates();
+  }, []);
+
+  const handleApplyUpdate = async () => {
+    setUpdatingApp(true);
+    try {
+      await Updates.reloadAsync();
+    } catch {
+      setUpdatingApp(false);
+    }
+  };
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -213,20 +251,18 @@ export default function RootLayout() {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const cachedUserStr = await AsyncStorage.getItem("unifix_cached_user");
-        const cachedUser = cachedUserStr ? JSON.parse(cachedUserStr) : null;
+      const cachedUser = loadUserCache();
 
-        if (cachedUser && cachedUser.uid && cachedUser.role && cachedUser.route) {
+if (cachedUser && cachedUser.uid && cachedUser.role && cachedUser.route) {
           currentRouteRef.current = cachedUser.route;
           setInitialRoute(cachedUser.route);
           setCachedRole(cachedUser.role);
           setAppReady(true);
         }
-
-        const accessToken = await AsyncStorage.getItem("unifix_access_token");
+     const accessToken = await getAccessToken();
 
         if (!accessToken) {
-          await AsyncStorage.removeItem("unifix_cached_user");
+          clearUserCache();
           if (!currentRouteRef.current) {
             currentRouteRef.current = "/login";
             setInitialRoute("/login");
@@ -243,9 +279,26 @@ export default function RootLayout() {
           : Infinity;
         const CACHE_TTL = 30 * 60 * 1000;
 
-        if (alreadyRouted && cacheAgeMs < CACHE_TTL) {
-          const pushToken = await registerForPushNotifications();
-          if (pushToken) savePushTokenToServer(pushToken);
+if (alreadyRouted && cacheAgeMs < CACHE_TTL) {
+          setAppReady(true);
+          try {
+            const pushToken = await registerForPushNotifications();
+            if (pushToken) await authAPI.savePushToken(pushToken).catch(() => {});
+          } catch {}
+          return;
+        }
+
+        const netState = await NetInfo.fetch();
+        const online = !!(netState.isConnected && netState.isInternetReachable);
+
+        if (!online && alreadyRouted) {
+          return;
+        }
+
+        if (!online && !alreadyRouted && cachedUser?.uid && cachedUser?.route) {
+          currentRouteRef.current = cachedUser.route;
+          setInitialRoute(cachedUser.route);
+          setAppReady(true);
           return;
         }
 
@@ -254,20 +307,15 @@ export default function RootLayout() {
           const res = await authAPI.myProfile();
           profile = res?.data?.profile ?? res?.profile ?? null;
         } catch (err: any) {
-          const netState = await NetInfo.fetch();
-          const online = !!(
-            netState.isConnected && netState.isInternetReachable
-          );
+          const netState2 = await NetInfo.fetch();
+          const stillOnline = !!(netState2.isConnected && netState2.isInternetReachable);
 
-          if (!online && alreadyRouted) {
+          if (!stillOnline && alreadyRouted) {
             return;
           }
 
-          await AsyncStorage.multiRemove([
-            "unifix_access_token",
-            "unifix_refresh_token",
-            "unifix_cached_user",
-          ]);
+    await clearAuthTokens();
+          clearUserCache();
           if (!alreadyRouted) {
             currentRouteRef.current = "/login";
             setInitialRoute("/login");
@@ -279,11 +327,8 @@ export default function RootLayout() {
         }
 
         if (!profile) {
-          await AsyncStorage.multiRemove([
-            "unifix_access_token",
-            "unifix_refresh_token",
-            "unifix_cached_user",
-          ]);
+          await clearAuthTokens();
+          clearUserCache();
           if (!alreadyRouted) {
             currentRouteRef.current = "/login";
             setInitialRoute("/login");
@@ -295,7 +340,7 @@ export default function RootLayout() {
         }
 
         if (!profile.profileCompleted) {
-          await AsyncStorage.removeItem("unifix_cached_user");
+          clearUserCache();
           const target = "/complete-profile";
           if (!alreadyRouted) {
             currentRouteRef.current = target;
@@ -309,8 +354,8 @@ export default function RootLayout() {
 
         const { role, verificationStatus } = profile;
 
-        if (role === "staff" && verificationStatus !== "approved") {
-          await AsyncStorage.removeItem("unifix_cached_user");
+      if (role === "staff" && verificationStatus !== "approved") {
+          clearUserCache();
           const target = "/complete-profile";
           if (!alreadyRouted) {
             currentRouteRef.current = target;
@@ -329,26 +374,27 @@ export default function RootLayout() {
             ? "/staff-dashboard"
             : "/";
 
-        await AsyncStorage.setItem(
-          "unifix_cached_user",
-          JSON.stringify({
-            uid: profile.id,
-            role,
-            route,
-            cachedAt: Date.now(),
-          })
-        );
+ saveUserCache({
+          uid: profile.id,
+          role,
+          route,
+          fullName: profile.fullName || "",
+          email: profile.email || "",
+        });
 
-        if (!alreadyRouted) {
+if (!hasNavigatedRef.current) {
           currentRouteRef.current = route;
           setInitialRoute(route);
+          setCachedRole(role);
           setAppReady(true);
         } else if (route !== currentRouteRef.current) {
           router.replace(route as any);
         }
 
-        const pushToken = await registerForPushNotifications();
-        if (pushToken) savePushTokenToServer(pushToken);
+        try {
+          const pushToken = await registerForPushNotifications();
+          if (pushToken) savePushTokenToServer(pushToken);
+        } catch {}
       } catch (err) {
         currentRouteRef.current = "/login";
         setInitialRoute("/login");
@@ -359,6 +405,30 @@ export default function RootLayout() {
     getDb().catch(() => {});
     initAuth();
 
+  const m = getMessaging();
+
+const foregroundUnsub = onMessage(m, async (remoteMessage) => {
+      const title = remoteMessage.notification?.title ?? remoteMessage.data?.title as string;
+      const body = remoteMessage.notification?.body ?? remoteMessage.data?.body as string;
+      if (!title && !body) return;
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: title ?? "",
+          body: body ?? "",
+          data: remoteMessage.data ?? {},
+          sound: "default",
+        },
+        trigger: null,
+      });
+    });
+
+    const tokenRefreshUnsub = onTokenRefresh(m, async (newToken: string) => {
+      console.log("[Push] FCM token refreshed");
+      await savePushTokenToServer(newToken);
+    });
+
+    setBackgroundMessageHandler(m, async () => {});
+
     notificationListener.current =
       Notifications.addNotificationReceivedListener(() => {});
 
@@ -368,8 +438,7 @@ export default function RootLayout() {
         if (!data) return;
 
         try {
-          const cachedStr = await AsyncStorage.getItem("unifix_cached_user");
-          const cached = cachedStr ? JSON.parse(cachedStr) : null;
+        const cached = loadUserCache();
           if (!cached) return;
 
           const { role, verificationStatus } = cached;
@@ -459,7 +528,9 @@ export default function RootLayout() {
         }
       });
 
-    return () => {
+return () => {
+      foregroundUnsub();
+      tokenRefreshUnsub();
       if (notificationListener.current)
         notificationListener.current.remove();
       if (responseListener.current) responseListener.current.remove();
@@ -472,14 +543,13 @@ export default function RootLayout() {
 
   useEffect(() => {
     const originalHandler = ErrorUtils.getGlobalHandler();
-    ErrorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
+ErrorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
       if (error?.message === "SESSION_EXPIRED") {
-        AsyncStorage.multiRemove([
-          "unifix_cached_user",
-          "unifix_active_tab",
-          "unifix_staff_active_tab",
-          "unifix_admin_active_tab",
-        ]).then(() => {
+        clearAuthTokens().then(() => {
+          clearUserCache();
+          mmkvDelete("unifix_active_tab");
+          mmkvDelete("unifix_staff_active_tab");
+          mmkvDelete("unifix_admin_active_tab");
           router.replace("/login" as any);
         });
         return;
@@ -491,19 +561,16 @@ export default function RootLayout() {
     };
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
     if (appReady && initialRoute && minSplashDone && !hasNavigatedRef.current) {
       hasNavigatedRef.current = true;
-      InteractionManager.runAfterInteractions(() => {
-        router.replace(initialRoute as any);
-        setTimeout(() => {
-          Animated.timing(skeletonAnim, {
-            toValue: 0,
-            duration: 250,
-            useNativeDriver: true,
-          }).start(() => setSkeletonVisible(false));
-        }, 300);
-      });
+      setTimeout(() => {
+        Animated.timing(skeletonAnim, {
+          toValue: 0,
+          duration: 250,
+          useNativeDriver: true,
+        }).start(() => setSkeletonVisible(false));
+      }, 100);
     }
   }, [appReady, initialRoute, minSplashDone]);
 
@@ -544,12 +611,46 @@ export default function RootLayout() {
     return <UnifixSplash />;
   }
 
-  if (!appReady || !minSplashDone) {
+if (!appReady || !minSplashDone || !initialRoute) {
     return getRoleSkeletonOrSplash();
   }
-
   return (
     <>
+      <Modal
+        visible={updateDownloaded}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
+        <View style={updateStyles.overlay}>
+          <View style={updateStyles.card}>
+            <View style={updateStyles.iconWrap}>
+              <Text style={updateStyles.iconText}>🎉</Text>
+            </View>
+            <Text style={updateStyles.title}>Update Available</Text>
+            <Text style={updateStyles.desc}>
+              A new version of UniFiX is ready. Restart now to get the latest
+              features and improvements.
+            </Text>
+            <Pressable
+              style={[updateStyles.btn, updatingApp && updateStyles.btnDisabled]}
+              onPress={handleApplyUpdate}
+              disabled={updatingApp}
+            >
+              <Text style={updateStyles.btnText}>
+                {updatingApp ? "Restarting..." : "Restart Now"}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={updateStyles.laterBtn}
+              onPress={() => setUpdateDownloaded(false)}
+              disabled={updatingApp}
+            >
+              <Text style={updateStyles.laterText}>Later</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       <Stack
         screenOptions={{ headerShown: false }}
         initialRouteName={
@@ -570,6 +671,7 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)/otp-verification" />
         <Stack.Screen name="(auth)/reset-password" />
         <Stack.Screen name="(auth)/complete-profile" />
+        <Stack.Screen name="(auth)/select-role" />
         <Stack.Screen name="(student)/submit-complaint" />
         <Stack.Screen name="(student)/complaint-success" />
         <Stack.Screen name="(student)/my-complaints" />
@@ -605,6 +707,69 @@ export default function RootLayout() {
     </>
   );
 }
+
+const updateStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+  },
+  card: {
+    backgroundColor: "#ffffff",
+    borderRadius: 20,
+    padding: 28,
+    alignItems: "center",
+    width: "100%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  iconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#f0fdf4",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  iconText: { fontSize: 28 },
+  title: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0f172a",
+    marginBottom: 10,
+    letterSpacing: -0.3,
+  },
+  desc: {
+    fontSize: 14,
+    color: "#64748b",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  btn: {
+    backgroundColor: "#16a34a",
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    width: "100%",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  btnDisabled: { opacity: 0.55 },
+  btnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  laterBtn: {
+    paddingVertical: 10,
+    alignItems: "center",
+    width: "100%",
+  },
+  laterText: { color: "#94a3b8", fontSize: 14, fontWeight: "500" },
+});
 
 const styles = StyleSheet.create({
   splash: {

@@ -1,7 +1,7 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getAccessToken } from './secureAuth';
 
 export async function getAdminToken(): Promise<string> {
-  const token = await AsyncStorage.getItem("unifix_access_token");
+  const token = await getAccessToken();
   if (!token) throw new Error("Not authenticated");
   return token;
 }

@@ -27,9 +27,8 @@ try {
     }
 
     const since = await getMeta(STUDENT_SYNC_KEY);
-    const data = await complaintsAPI.myComplaintsSince(since ? parseInt(since) : null);
-
-    const incoming = data?.complaints ?? [];
+const data = await complaintsAPI.myComplaintsSince(since ? parseInt(since) : null);
+    const incoming = data?.data?.complaints ?? data?.complaints ?? [];
 
     if (incoming.length > 0) {
       await upsertComplaints(incoming);
@@ -38,6 +37,7 @@ try {
     await setMeta(STUDENT_HASH_KEY, newHash);
     await setMeta(STUDENT_SYNC_KEY, String(hashRes.serverTime));
 } catch (e: any) {
+    if (e?.message === 'SESSION_EXPIRED') return;
     console.error('[sync] syncStudentComplaints error:', e?.message, e?.stack, JSON.stringify(e));
   }
 };
@@ -63,9 +63,8 @@ export const syncAdminComplaints = async (): Promise<void> => {
     const since = await getMeta(ADMIN_SYNC_KEY);
  
 
-    const data = await complaintsAPI.allComplaintsSince(since ? parseInt(since) : null);
-  
-    const incoming = data?.complaints ?? [];
+const data = await complaintsAPI.allComplaintsSince(since ? parseInt(since) : null);
+    const incoming = data?.data?.complaints ?? data?.complaints ?? [];
    
 
     if (incoming.length > 0) {
@@ -91,7 +90,9 @@ export const forceRefreshStudentComplaints = async (uid: string): Promise<void> 
     await setMeta(STUDENT_HASH_KEY, '');
     await setMeta(STUDENT_SYNC_KEY, '');
     await syncStudentComplaints(uid);
-  } catch {}
+  } catch (e) {
+    console.error('[sync] forceRefresh error:', e);
+  }
 };
 export const getAdminComplaintsFromDb = async () => {
   return getAllComplaintsLocal();

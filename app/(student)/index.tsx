@@ -1,6 +1,7 @@
 import ScreenWrapper from "@/wrappers/ScreenWrapper";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { clearAuthTokens } from '@/utils/secureAuth';
+import { mmkvDelete } from '@/utils/mmkv';
 import * as Notifications from "expo-notifications";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
@@ -40,7 +41,7 @@ import {
   syncMyLostFoundPosts
 } from "../../sync/lostFoundSyncManager";
 
-import { getStudentComplaintsFromDb, syncStudentComplaints } from "../../sync/syncManager";
+import { getStudentComplaintsFromDb, syncStudentComplaints, forceRefreshStudentComplaints } from "../../sync/syncManager";
 import { loadUserCache, saveUserCache } from "../../utils/cache";
 import ComplaintsSection from "./sections/ComplaintsSection";
 import LostFoundSection from "./sections/LostFoundSection";
@@ -366,18 +367,14 @@ const setLoadingOnce = useCallback((val: boolean) => {
   setLoading(val);
 }, []);
 
-// Load cached user instantly to skip skeleton on return
 useEffect(() => {
-    if (hasLoadedOnceRef.current) return; // already loaded, skip
-    loadUserCache().then((parsed) => {
-      if (parsed) {
-        setUserData(parsed);
-        setUserRole(parsed.role || "");
-        setLoadingOnce(false);
-      } else if (!hasLoadedOnceRef.current) {
-        // no cache, keep loading=true until network fetch completes
-      }
-    });
+    if (hasLoadedOnceRef.current) return;
+    const parsed = loadUserCache();
+    if (parsed) {
+      setUserData(parsed);
+      setUserRole(parsed.role || "");
+      setLoadingOnce(false);
+    }
   }, []);
 const [activeTab, setActiveTab] = useState<TabType>(
   () => (useLoadingStore.getState().getActiveTab("student", "home") as TabType)
@@ -398,12 +395,38 @@ const params = useLocalSearchParams<{
 useEffect(() => {
     if (params.openTab === "complaints") {
       setActiveTab("complaints");
-      if (currentUserId) fetchComplaints(currentUserId);
-    } else if (params.openTab === "lostfound") {
+      const doRefresh = async () => {
+        let uid = currentUserId;
+        if (!uid) {
+      const cached = loadUserCache();
+          uid = cached?.uid ?? "";
+        }
+        if (!uid) return;
+        await forceRefreshStudentComplaints(uid);
+        await fetchComplaints(uid);
+      };
+      doRefresh();
+} else if (params.openTab === "lostfound") {
       setActiveTab("lostfound");
       if (params.openLFTab) {
         setLfActiveTab(params.openLFTab as LfActiveTab);
       }
+      const doLFRefresh = async () => {
+        let uid = currentUserId;
+        if (!uid) {
+          const cached = loadUserCache();
+          uid = cached?.uid ?? "";
+        }
+        if (!uid) return;
+        if (params.openLFTab === "feed") {
+          await forceRefreshFeed();
+        } else if (params.openLFTab === "lostreports") {
+          await forceRefreshLostReports();
+        } else {
+          await fetchLostFound(uid, true);
+        }
+      };
+      doLFRefresh();
     }
 }, [params.openTab, params.openLFTab, currentUserId]);
 
@@ -457,10 +480,9 @@ const forceRefreshLostReports = useCallback(async () => {
 const forceRefreshFeed = useCallback(async () => {
     const uid = currentUserId;
     if (!uid) return;
-    // Clear feed hash so next sync does a full re-fetch
     const { setMeta } = await import("../../db/metadataDb");
-    await setMeta("lostfound_feed_hash", "");
-    await setMeta("lostfound_claims_hash", "");
+    await setMeta("lf_feed_hash", "");
+    await setMeta("lf_claims_hash", "");
     await Promise.all([
       syncLostFoundFeed(),
       syncClaims(),
@@ -469,9 +491,9 @@ const forceRefreshFeed = useCallback(async () => {
       getLostFoundFeedFromDb(),
       getAllClaimsFromDb(),
     ]);
-    setFeedItems(feedUpdated as any);
+    setFeedItems(feedUpdated.map((item: any) => ({ ...item, isMyPost: item.postedBy === uid || item.isMyPost === true })) as any);
     setClaimItems(claimsUpdated as any);
-  }, []);
+  }, [currentUserId]);
 const fetchLostFound = useCallback(async (uid: string, silent = false) => {
     if (!silent) {
       setLfLoading(true);
@@ -485,7 +507,7 @@ const fetchLostFound = useCallback(async (uid: string, silent = false) => {
         getAllClaimsFromDb(),
       ]);
 
-     if (feedLocal.length > 0) setFeedItems(feedLocal.map((item: any) => ({ ...item, isMyPost: item.postedBy === uid })) as any);
+if (feedLocal.length > 0) setFeedItems(feedLocal.map((item: any) => ({ ...item, isMyPost: item.postedBy === uid || item.isMyPost === true })) as any);
    if (reportsLocal.length > 0) {
         setLostReports(reportsLocal as any);
         setUserLostReports(reportsLocal.filter((r: any) => r.postedByUid === uid || r.isMyPost === true) as any);
@@ -505,7 +527,7 @@ await Promise.all([
         getAllClaimsFromDb(),
       ]);
 
-     setFeedItems(feedUpdated.map((item: any) => ({ ...item, isMyPost: item.postedBy === uid })) as any);
+  setFeedItems(feedUpdated.map((item: any) => ({ ...item, isMyPost: item.postedBy === uid || item.isMyPost === true })) as any);
       setLostReports(reportsUpdated as any);
   setUserLostReports(reportsUpdated.filter((r: any) => r.postedByUid === uid || r.isMyPost === true) as any);
       setClaimItems(claimsUpdated as any);
@@ -530,36 +552,21 @@ await Promise.all([
     }
   }, []);
 
-const registerPushToken = useCallback(async () => {
-    try {
-      const already = await AsyncStorage.getItem("unifix_push_registered");
-      if (already) return;
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== "granted") return;
-      const token = (await Notifications.getExpoPushTokenAsync()).data;
-      if (token) {
-        await authAPI.savePushToken(token);
-        await AsyncStorage.setItem("unifix_push_registered", "1");
-      }
-    } catch {
-      // Error handled silently
-    }
-  }, []);
+const registerPushToken = useCallback(async () => {}, []);
 
  
 
  useEffect(() => {
     const init = async () => {
       try {
-        // Always load profile from cache first for instant display
-        const cached = await loadUserCache();
+     const cached = loadUserCache();
         if (cached) {
           setUserData(cached);
           setUserRole(cached.role || "");
           setLoadingOnce(false);
         }
 
-  const uid = cached?.uid;
+        const uid = cached?.uid;
         if (!uid) return;
 
         setCurrentUserId(uid);
@@ -699,14 +706,25 @@ const handleLogout = useCallback(async () => {
     setUserRole("");
     setLoading(false);
     try {
-      await authAPI.logoutAllDevices();
+      const { getMessaging, getToken } = require("@react-native-firebase/messaging");
+      const fcmToken = await getToken(getMessaging()).catch(() => null);
+      await authAPI.logoutAllDevices(fcmToken);
     } catch {}
-    await AsyncStorage.multiRemove([
-      "unifix_cached_user",
-      "unifix_active_tab",
-      "unifix_staff_active_tab",
-      "unifix_admin_active_tab",
-    ]);
+await clearAuthTokens();
+    mmkvDelete("unifix_cached_user");
+    mmkvDelete("unifix_active_tab");
+    mmkvDelete("unifix_staff_active_tab");
+    mmkvDelete("unifix_admin_active_tab");
+    mmkvDelete("unifix_push_token");
+    mmkvDelete("lf_feed_hash");
+    mmkvDelete("lf_claims_hash");
+    mmkvDelete("lr_feed_hash");
+    mmkvDelete("lf_feed_synced_at");
+    mmkvDelete("lf_claims_synced_at");
+    mmkvDelete("lr_feed_synced_at");
+    mmkvDelete("lf_myposts_synced_at");
+    const { resetDb } = await import("../../db/database");
+    await resetDb();
     router.replace("/login" as any);
   }, [router]);
 
@@ -770,7 +788,11 @@ const handleMarkFound = useCallback(async (id: string) => {
   }, [forceRefreshLostReports]);
 
   const bottomNavHeight = useMemo(() => 60 + insets.bottom, [insets.bottom]);
-  const firstName = useMemo(() => userData?.fullName?.split(" ")[0] ?? "User", [userData?.fullName]);
+const firstName = useMemo(() => {
+  const name = userData?.fullName?.trim();
+  if (!name) return "";
+  return name.split(" ")[0];
+}, [userData?.fullName]);
   const recentComplaints = useMemo(() => complaints.slice(0, 3), [complaints]);
 
   const NAV_TABS = useMemo<{

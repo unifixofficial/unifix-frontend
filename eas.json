@@ -6,7 +6,10 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
     },
     "preview": {
       "channel": "preview",
@@ -20,8 +23,8 @@
       "channel": "production",
       "autoIncrement": true,
       "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease"
+       "buildType": "app-bundle",
+        "gradleCommand": ":app:bundleRelease"
       }
     }
   },

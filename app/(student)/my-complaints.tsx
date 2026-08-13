@@ -12,7 +12,8 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getAccessToken } from '@/utils/secureAuth';
+import { loadUserCache } from '@/utils/cache';
 import { useLoadingStore } from "../../store/loadingStore";
 import { getStudentComplaintsFromDb, syncStudentComplaints } from '../../sync/syncManager';
 
@@ -85,8 +86,7 @@ const fetchComplaints = useCallback(async (uid: string) => {
 
 const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    const cachedStr = await AsyncStorage.getItem("unifix_cached_user");
-    const cached = cachedStr ? JSON.parse(cachedStr) : null;
+    const cached = loadUserCache();
     if (cached?.uid) await fetchComplaints(cached.uid);
     setRefreshing(false);
   }, [fetchComplaints]);
@@ -104,10 +104,9 @@ const onRefresh = useCallback(async () => {
 
 useEffect(() => {
     const init = async () => {
-      const token = await AsyncStorage.getItem("unifix_access_token");
+      const token = await getAccessToken();
       if (!token) { router.replace("/login" as any); return; }
-      const cachedStr = await AsyncStorage.getItem("unifix_cached_user");
-      const cached = cachedStr ? JSON.parse(cachedStr) : null;
+      const cached = loadUserCache();
       const uid = cached?.uid;
       if (!uid) { router.replace("/login" as any); return; }
       if (!forceSync) {
@@ -137,11 +136,10 @@ useEffect(() => {
         <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
         <View style={s.header}>
           <TouchableOpacity onPress={() => {
-AsyncStorage.getItem("unifix_cached_user").then((str) => {
-    const uid = str ? JSON.parse(str)?.uid : null;
-    if (uid) import("../../sync/syncManager").then(({ syncStudentComplaints }) => {
-      syncStudentComplaints(uid);
-    });
+const cached = loadUserCache();
+  const uid = cached?.uid;
+  if (uid) import("../../sync/syncManager").then(({ syncStudentComplaints }) => {
+    syncStudentComplaints(uid);
   });
   router.replace("/" as any);
 }} style={s.backBtn}>

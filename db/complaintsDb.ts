@@ -41,10 +41,12 @@ export type LocalComplaint = {
 };
 const toSeconds = (ts: any): number | null => {
   if (!ts) return null;
-  if (typeof ts === 'number') return ts;
+  if (typeof ts === 'number') return ts > 1e10 ? Math.floor(ts / 1000) : ts;
+  if (typeof ts === 'string') return Math.floor(new Date(ts).getTime() / 1000);
+  if (ts instanceof Date) return Math.floor(ts.getTime() / 1000);
   if (ts._seconds) return ts._seconds;
   if (ts.seconds) return ts.seconds;
-  if (typeof ts.toMillis === 'function') return ts.toMillis() / 1000;
+  if (typeof ts.toMillis === 'function') return Math.floor(ts.toMillis() / 1000);
   return null;
 };
 
@@ -85,10 +87,15 @@ export const upsertComplaints = async (complaints: LocalComplaint[]): Promise<vo
         c.id, c.ticketId ?? null, c.category ?? null,
         c.subIssue ?? null, c.customIssue ?? null, c.description ?? null,
         c.building ?? null, c.roomDetail ?? null, c.photoUrl ?? null,
-        c.status ?? null, c.queueStatus ?? null, c.submittedBy ?? null,
-        c.submittedByName ?? null, c.submittedByRole ?? null,
-        c.submittedByEmail ?? null, c.submittedByPhone ?? null,
-        c.assignedTo ?? null, c.assignedToName ?? null, c.assignedToPhone ?? null,
+        c.status ?? null, c.queueStatus ?? null,
+        (c as any).submittedById ?? c.submittedBy ?? null,
+        (c as any).submittedByName ?? null,
+        (c as any).submittedByRole ?? null,
+        (c as any).submittedByEmail ?? null,
+        (c as any).submittedByPhone ?? null,
+        (c as any).assignedToId ?? c.assignedTo ?? null,
+        (c as any).assignedToName ?? null,
+        (c as any).assignedToPhone ?? null,
       c.assignableTo ? JSON.stringify(c.assignableTo) : null,
         c.rejectedBy ? JSON.stringify(c.rejectedBy) : null,
         c.rating ?? null,c.ratingComment ?? null,

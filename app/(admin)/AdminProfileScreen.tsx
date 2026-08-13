@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getAccessToken, clearAuthTokens } from '@/utils/secureAuth';
+import { clearUserCache } from '@/utils/cache';
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 
@@ -49,17 +50,18 @@ const [profileScreen, setProfileScreen] = useState<"main" | "legal" | "settings"
       {
         text: "Log Out",
         style: "destructive",
-    onPress: async () => {
+onPress: async () => {
         try {
-          const token = await AsyncStorage.getItem("unifix_access_token");
+          const token = await getAccessToken();
           if (token) {
-           await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/logout-all-devices`, {
+            await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/logout-all-devices`, {
               method: "POST",
               headers: { Authorization: `Bearer ${token}` },
             });
           }
         } catch {}
-        await AsyncStorage.multiRemove(["unifix_access_token", "unifix_refresh_token", "unifix_cached_user"]);
+        await clearAuthTokens();
+        clearUserCache();
         router.replace("/login" as any);
       },
       },
@@ -87,7 +89,7 @@ const [profileScreen, setProfileScreen] = useState<"main" | "legal" | "settings"
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
       const url = data.secure_url;
- const token = await AsyncStorage.getItem("unifix_access_token");
+const token = await getAccessToken();
       await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/update-profile`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

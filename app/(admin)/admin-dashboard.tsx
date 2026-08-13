@@ -1,6 +1,6 @@
 import { useLoadingStore } from "@/store/loadingStore";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getAccessToken } from '@/utils/secureAuth';
 import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -52,7 +52,7 @@ const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef = useRef(true);
 
 async function getAdminToken(): Promise<string> {
-    const token = await AsyncStorage.getItem("unifix_access_token");
+    const token = await getAccessToken();
     if (!token) throw new Error("Not authenticated");
     return token;
   }
@@ -148,7 +148,7 @@ useEffect(() => {
 
 useEffect(() => {
     mountedRef.current = true;
-    AsyncStorage.getItem("unifix_access_token").then((token) => {
+    getAccessToken().then((token) => {
       if (token) {
         fetchAdminData();
         registerAdminPushToken();
@@ -162,19 +162,19 @@ useEffect(() => {
     };
   }, []);
 
-  async function registerAdminPushToken() {
+async function registerAdminPushToken() {
     try {
-      const already = await AsyncStorage.getItem("unifix_push_registered");
+      const { mmkvGet, mmkvSet } = require('@/utils/mmkv');
+      const already = mmkvGet("unifix_push_registered");
       if (already) return;
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== "granted") return;
       const token = (await Notifications.getExpoPushTokenAsync()).data;
       if (token) {
         await authAPI.savePushToken(token);
-        await AsyncStorage.setItem("unifix_push_registered", "1");
+        mmkvSet("unifix_push_registered", "1");
       }
     } catch {
-      // silent fail
     }
   }
 

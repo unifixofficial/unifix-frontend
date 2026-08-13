@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getAccessToken } from '@/utils/secureAuth';
 import { useMasterData, resolveRoom as resolveRoomFromMaster } from "../../../hooks/useMasterData";
 const CLOUDINARY_CLOUD = "dcizaxjul";
 const CLOUDINARY_PRESET = "unifix_upload";
@@ -65,7 +65,7 @@ export default memo(function ReportSection({
   const [reportUploadingPhoto, setReportUploadingPhoto] = useState(false);
   const [reportError, setReportError] = useState("");
 
-const { data: masterData, loading: masterLoading } = useMasterData();
+const { data: masterData, loading: masterLoading, error: masterError } = useMasterData();
   const reportSubIssues = useMemo(() => {
     const cat = masterData?.categories.find(c => c.name.toLowerCase() === reportCategory.toLowerCase());
     return cat?.subCategories.map(s => s.name) ?? [];
@@ -158,7 +158,7 @@ const { data: masterData, loading: masterLoading } = useMasterData();
       return setReportError("Please enter a valid room number.");
     setReportSubmitting(true);
     try {
-   const freshToken = await AsyncStorage.getItem("unifix_access_token");
+  const freshToken = await getAccessToken();
       if (!freshToken) {
         setReportError("Authentication error. Please login again.");
         return;
@@ -260,7 +260,7 @@ const { data: masterData, loading: masterLoading } = useMasterData();
           </Text>
         </View>
 
-        <Text style={styles.sectionLabel}>SELECT CATEGORY</Text>
+ <Text style={styles.sectionLabel}>SELECT CATEGORY</Text>
       <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}

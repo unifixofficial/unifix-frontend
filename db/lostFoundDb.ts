@@ -54,6 +54,8 @@ export type LocalClaim = {
 const toSeconds = (ts: any): number | null => {
   if (!ts) return null;
   if (typeof ts === 'number') return ts > 1e10 ? Math.floor(ts / 1000) : ts;
+  if (typeof ts === 'string') return Math.floor(new Date(ts).getTime() / 1000);
+  if (ts instanceof Date) return Math.floor(ts.getTime() / 1000);
   if (ts._seconds) return ts._seconds;
   if (ts.seconds) return ts.seconds;
   if (typeof ts.toMillis === 'function') return Math.floor(ts.toMillis() / 1000);
@@ -69,11 +71,21 @@ export const upsertLostFoundItems = async (items: LocalLostFoundItem[]): Promise
   const db = await getDb();
   for (const i of items) {
     await db.runAsync(
-      `INSERT OR REPLACE INTO lostfound_items
+  `INSERT INTO lostfound_items
         (id, itemName, category, description, roomNumber, roomLabel, collectLocation,
         photoUrl, postedBy, postedByName, postedByRole, status, handedToName,
         handedAt, createdAt, updatedAt, isMyPost)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET
+        itemName=excluded.itemName, category=excluded.category,
+        description=excluded.description, roomNumber=excluded.roomNumber,
+        roomLabel=excluded.roomLabel, collectLocation=excluded.collectLocation,
+        photoUrl=excluded.photoUrl, postedBy=excluded.postedBy,
+        postedByName=excluded.postedByName, postedByRole=excluded.postedByRole,
+        status=excluded.status, handedToName=excluded.handedToName,
+        handedAt=excluded.handedAt, createdAt=excluded.createdAt,
+        updatedAt=excluded.updatedAt,
+        isMyPost=MAX(isMyPost, excluded.isMyPost)`,
       [
         i.id, i.itemName ?? null, i.category ?? null, i.description ?? null,
         i.roomNumber ?? null, i.roomLabel ?? null, i.collectLocation ?? null,
@@ -167,7 +179,7 @@ export const getLostFoundFeed = async (): Promise<LocalLostFoundItem[]> => {
 export const getMyLostFoundPosts = async (uid: string): Promise<LocalLostFoundItem[]> => {
   const db = await getDb();
   const rows = await db.getAllAsync<any>(
-    `SELECT * FROM lostfound_items WHERE postedBy = ? ORDER BY createdAt DESC`,
+    `SELECT * FROM lostfound_items WHERE postedBy = ? OR isMyPost = 1 ORDER BY createdAt DESC`,
     [uid]
   );
   return rows.map(fromLFRow);

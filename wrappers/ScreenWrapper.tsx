@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+
 import { Skeleton } from 'moti/skeleton'
 import { useEffect, useRef } from 'react'
 import { Animated, ScrollView, StatusBar, StyleSheet, View } from 'react-native'
@@ -66,9 +66,6 @@ case 'complaint': return (
 
 const loadedScreens = new Set<string>()
 
-function persistLoadedScreens() {
-  AsyncStorage.setItem('unifix_loaded_screens', JSON.stringify([...loadedScreens])).catch(() => {})
-}
 
 export default function ScreenWrapper({
   loading,
@@ -79,7 +76,7 @@ export default function ScreenWrapper({
   roleReady = true,
 }: Props) {
   const insets = useSafeAreaInsets()
-  // Check loadedScreens only if AsyncStorage has already been read
+
 const { isLoaded: isScreenLoaded } = useLoadingStore()
 const skipSkeleton = skeleton === 'none'
   const alreadyLoaded = skipSkeleton || loadedScreens.has(skeleton) || isScreenLoaded(`screen_${skeleton}`)
@@ -116,8 +113,7 @@ if (loading === false && !hasLoadedOnce.current) {
 
 if (prevLoading.current === true && loading === false) {
     hasLoadedOnce.current = true
-      loadedScreens.add(skeleton)
-      persistLoadedScreens()
+  loadedScreens.add(skeleton)
       useLoadingStore.getState().markLoaded(`screen_${skeleton}`)
       Animated.parallel([
         Animated.timing(skeletonOpacity, {

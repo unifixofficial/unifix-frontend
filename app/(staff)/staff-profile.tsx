@@ -21,7 +21,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getAccessToken, clearAuthTokens } from '@/utils/secureAuth';
+import { clearUserCache } from '@/utils/cache';
 
 import { authAPI } from "../../services/api";
 
@@ -167,7 +168,7 @@ useEffect(() => {
       setPhotoUploading(true);
 const url = await uploadToCloudinary(result.assets[0].uri, "unifix/profiles");
       await authAPI.updateProfile(staffData?.fullName || "", staffData?.phone || "");
-      const token = await AsyncStorage.getItem("unifix_access_token");
+      const token = await getAccessToken();
       await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/complete-profile`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -250,8 +251,9 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
         style: "destructive",
        onPress: async () => {
          try {
-                await authAPI.logoutAllDevices();
-                await AsyncStorage.multiRemove(["unifix_access_token", "unifix_refresh_token", "unifix_cached_user"]);
+              await authAPI.logoutAllDevices();
+                await clearAuthTokens();
+                clearUserCache();
                 router.replace("/login" as any);
               } catch {}
         },
@@ -413,8 +415,9 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
                   {
                     text: "Yes",
                     style: "destructive",
-          onPress: async () => {
-              await AsyncStorage.multiRemove(["unifix_access_token", "unifix_refresh_token", "unifix_cached_user"]);
+   onPress: async () => {
+              await clearAuthTokens();
+              clearUserCache();
               router.replace("/login" as any);
             },
                   },

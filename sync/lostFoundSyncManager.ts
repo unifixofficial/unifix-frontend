@@ -101,8 +101,10 @@ const since = await getMeta('lr_feed_synced_at');
     }
     await setMeta('lr_feed_hash', hashRes?.hash);
     await setMeta('lr_feed_synced_at', String(hashRes?.serverTime));
-    // console.log('[lr] sync complete, new hash:', hashRes?.hash);
-  } catch (e) { console.error('[lr] syncLostReports error:', e); }
+} catch (e: any) {
+    if (e?.message === 'SESSION_EXPIRED') return;
+    console.error('[lr] syncLostReports error:', e);
+  }
 };
 
 export const getLostFoundFeedFromDb = getLostFoundFeed;

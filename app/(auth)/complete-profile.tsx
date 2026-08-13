@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getAccessToken, clearAuthTokens } from '@/utils/secureAuth';
+import { saveUserCache, clearUserCache } from '@/utils/cache';
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
@@ -324,7 +325,7 @@ const [uid, setUid] = useState<string | null>(null);
   const [teacherIdCard, setTeacherIdCard] = useState<FileItem>(null);
 
 useEffect(() => {
-    AsyncStorage.getItem("unifix_access_token").then(async (token) => {
+getAccessToken().then(async (token) => {
       if (!token) {
         router.replace("/login" as any);
         return;
@@ -478,7 +479,7 @@ if (!uid) return;
         updateData.verificationStatus = "pending";
         updateData.rejectionMessage = null;
       }
-const token = await AsyncStorage.getItem("unifix_access_token");
+const token = await getAccessToken();
       await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/complete-profile`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -490,15 +491,7 @@ const token = await AsyncStorage.getItem("unifix_access_token");
         route = "/complete-profile";
       }
 
-      await AsyncStorage.setItem(
-        "unifix_cached_user",
-        JSON.stringify({
-          uid,
-          role,
-          route,
-          cachedAt: Date.now(),
-        }),
-      );
+      saveUserCache({ uid, role, route });
 
       if (role === "staff") {
         try {
@@ -588,7 +581,8 @@ const token = await AsyncStorage.getItem("unifix_access_token");
           <TouchableOpacity
             style={s.backToLoginBtn}
             onPress={async () => {
-             await AsyncStorage.multiRemove(["unifix_access_token", "unifix_refresh_token", "unifix_cached_user"]);
+           await clearAuthTokens();
+             clearUserCache();
               router.replace("/login" as any);
             }}
             activeOpacity={0.85}

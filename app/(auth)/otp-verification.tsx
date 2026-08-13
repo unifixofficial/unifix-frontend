@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { setAccessToken, setRefreshToken } from '@/utils/secureAuth';
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -57,8 +57,8 @@ export default function OTPVerificationScreen() {
     try {
       if (type === "email-verification") {
    const data = await authAPI.verifyOtp(email, code, fullName, password, role);
-        await AsyncStorage.setItem("unifix_access_token", data.token);
-        await AsyncStorage.setItem("unifix_refresh_token", data.refreshToken);
+       await setAccessToken(data.token);
+        await setRefreshToken(data.refreshToken);
         router.replace("/complete-profile");
       } else if (type === "password-reset") {
         await authAPI.validateResetOtp(email, code);

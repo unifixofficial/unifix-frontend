@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getAccessToken } from '@/utils/secureAuth';
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -47,7 +47,7 @@ const [roomError, setRoomError] = useState("");
   const router = useRouter();
 
 useEffect(() => {
-    AsyncStorage.getItem("unifix_access_token").then((token) => {
+    getAccessToken().then((token) => {
       if (!token) router.replace("/login" as any);
     });
   }, []);

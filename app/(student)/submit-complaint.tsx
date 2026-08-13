@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getAccessToken } from '@/utils/secureAuth';
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -115,14 +115,39 @@ export default function SubmitComplaintScreen() {
   const [photo, setPhoto] = useState<{ uri: string; name: string } | null>(
     null,
   );
-  const [submitting, setSubmitting] = useState(false);
+const [submitting, setSubmitting] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState("");
-
+  const [availabilityChecked, setAvailabilityChecked] = useState(false);
+  const [availabilityOpen, setAvailabilityOpen] = useState(true);
+  const [availabilityMessage, setAvailabilityMessage] = useState("");
 useEffect(() => {
-    AsyncStorage.getItem("unifix_access_token").then((token) => {
+    getAccessToken().then((token) => {
       if (!token) router.replace("/login" as any);
     });
+  }, []);
+
+  useEffect(() => {
+    const checkAvailability = async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/complaints/settings`);
+        const data = await res.json();
+        if (res.ok) {
+          setAvailabilityOpen(data.isCurrentlyOpen);
+          if (!data.isCurrentlyOpen) {
+            const days = data.workingDays;
+            const dayNames: Record<string, string> = { monday: "Monday", tuesday: "Tuesday", wednesday: "Wednesday", thursday: "Thursday", friday: "Friday", saturday: "Saturday", sunday: "Sunday" };
+            const enabledDays = Object.entries(days).filter(([, v]) => v).map(([k]) => dayNames[k]).join(", ");
+            setAvailabilityMessage(`Complaint submissions are currently closed.\n\nAvailable: ${enabledDays || "No days configured"}\n${data.openingTime} - ${data.closingTime} (${data.timezone})`);
+          }
+        }
+      } catch {
+        setAvailabilityOpen(true);
+      } finally {
+        setAvailabilityChecked(true);
+      }
+    };
+    checkAvailability();
   }, []);
 
 const handleRoomInput = (val: string) => {
@@ -132,15 +157,19 @@ const handleRoomInput = (val: string) => {
       setResolvedRoom(null);
       return;
     }
-    const resolved = resolveRoomFromMaster(masterData?.buildings ?? [], val);
-    if (resolved) setResolvedRoom(resolved);
-    else {
+    if (masterLoading || !masterData?.buildings?.length) {
+      setResolvedRoom(null);
+      return;
+    }
+    const resolved = resolveRoomFromMaster(masterData.buildings, val);
+    if (resolved) {
+      setResolvedRoom(resolved);
+    } else {
       setResolvedRoom(null);
       if (val.trim().length >= 3)
         setRoomError("Room not found. Try e.g. 319, 214, 003A.");
     }
   };
-
   const pickPhoto = async () => {
     Alert.alert("Add Photo", "Choose an option", [
       {
@@ -200,15 +229,8 @@ const handleRoomInput = (val: string) => {
     ]);
   };
 
-  const handleSubmit = async () => {
+const handleSubmit = async () => {
     setError("");
-    const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-    const hour = nowIST.getUTCHours();
-    if (hour < 8 || hour >= 20) {
-      return setError(
-        "Complaints can only be submitted between 8:00 AM and 8:00 PM.",
-      );
-    }
     const category = selectedCategory || "others";
     const finalSubIssue = subIssue || null;
     const finalCustom = issueTitle.trim() || null;
@@ -218,7 +240,7 @@ const handleRoomInput = (val: string) => {
 
     setSubmitting(true);
     try {
-    const freshToken = await AsyncStorage.getItem("unifix_access_token");
+  const freshToken = await getAccessToken();
       if (!freshToken) {
         setError("Authentication error. Please login again.");
         return;
@@ -310,12 +332,23 @@ const selectedCategoryObj = masterData?.categories.find(
           </Text>
         </View>
 
+{availabilityChecked && !availabilityOpen && (
+          <View style={{ backgroundColor: "#fef2f2", borderBottomWidth: 1, borderBottomColor: "#fecaca", padding: 16 }}>
+            <Text style={{ color: "#dc2626", fontWeight: "700", fontSize: 13, marginBottom: 4 }}>Complaints Currently Closed</Text>
+            <Text style={{ color: "#b91c1c", fontSize: 12, lineHeight: 18 }}>{availabilityMessage}</Text>
+          </View>
+        )}
         <ScrollView
           contentContainerStyle={s.container}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
+          <Text style={{color:'red', fontSize:10}}>
+  Buildings: {masterData?.buildings?.length ?? 'null'} | 
+  Loading: {masterLoading ? 'yes' : 'no'} |
+  Rooms: {masterData?.buildings?.[0]?.rooms?.length ?? 'null'}
+</Text>
           <Text style={s.sectionLabel}>SELECT CATEGORY</Text>
 <ScrollView
             horizontal
@@ -501,10 +534,10 @@ const selectedCategoryObj = masterData?.categories.find(
             </View>
           ) : null}
 
-          <TouchableOpacity
-            style={[s.submitBtn, submitting && s.btnDisabled]}
+   <TouchableOpacity
+            style={[s.submitBtn, (submitting || !availabilityOpen) && s.btnDisabled]}
             onPress={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || !availabilityOpen}
             activeOpacity={0.85}
           >
             {submitting ? (

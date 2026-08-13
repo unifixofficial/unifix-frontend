@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getAccessToken } from '@/utils/secureAuth';
 import React, { memo, useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -169,7 +169,7 @@ export default memo(function ProfileSection({
         result.assets[0].uri,
         "unifix/profiles",
       );
-  const token = await AsyncStorage.getItem("unifix_access_token");
+const token = await getAccessToken();
       await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/complete-profile`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

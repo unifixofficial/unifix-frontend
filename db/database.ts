@@ -4,15 +4,37 @@ let db: SQLite.SQLiteDatabase | null = null;
 
 let dbInitPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
+const DB_VERSION = 2;
+
 export const getDb = async (): Promise<SQLite.SQLiteDatabase> => {
-  if (db) return db;
+  if (db) {
+    try {
+      await db.getFirstAsync('SELECT 1');
+      return db;
+    } catch {
+      db = null;
+      dbInitPromise = null;
+    }
+  }
   if (dbInitPromise) return dbInitPromise;
   dbInitPromise = (async () => {
     db = await SQLite.openDatabaseAsync('unifix.db');
-  await db.execAsync('PRAGMA journal_mode = WAL;');
-  await db.execAsync('PRAGMA foreign_keys = ON;');
-  await initTables(db);
- await migrateComplaintsTable(db);
+    await db.execAsync('PRAGMA journal_mode = WAL;');
+    await db.execAsync('PRAGMA foreign_keys = ON;');
+    await db.execAsync('CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY);');
+    const versionRow = await db.getFirstAsync<{ version: number }>('SELECT version FROM db_version LIMIT 1;');
+    const currentVersion = versionRow?.version ?? 0;
+    if (currentVersion < DB_VERSION) {
+      await db.execAsync('DROP TABLE IF EXISTS complaints;');
+      await db.execAsync('DROP TABLE IF EXISTS metadata;');
+      await db.execAsync('DROP TABLE IF EXISTS lostfound_items;');
+      await db.execAsync('DROP TABLE IF EXISTS lost_reports;');
+      await db.execAsync('DROP TABLE IF EXISTS claims;');
+      await db.execAsync('DELETE FROM db_version;');
+      await db.execAsync(`INSERT INTO db_version (version) VALUES (${DB_VERSION});`);
+    }
+    await initTables(db);
+    await migrateComplaintsTable(db);
     await initLostFoundTablesInline(db);
     dbInitPromise = null;
     return db;
@@ -103,12 +125,7 @@ const initTables = async (db: SQLite.SQLiteDatabase): Promise<void> => {
     );
   `);
 
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS metadata (
-      key TEXT PRIMARY KEY,
-      value TEXT
-    );
-  `);
+
 
   await db.execAsync(`
     CREATE INDEX IF NOT EXISTS idx_complaints_submittedBy
@@ -182,12 +199,18 @@ const initLostFoundTablesInline = async (db: SQLite.SQLiteDatabase): Promise<voi
 };
 
 export const resetDb = async (): Promise<void> => {
-  const database = await getDb();
- await database.execAsync('DROP TABLE IF EXISTS complaints;');
-  await database.execAsync('DROP TABLE IF EXISTS metadata;');
-  await database.execAsync('DROP TABLE IF EXISTS lostfound_items;');
-  await database.execAsync('DROP TABLE IF EXISTS lost_reports;');
-  await database.execAsync('DROP TABLE IF EXISTS claims;');
-  db = null;
+  try {
+    const database = await getDb();
+    await database.execAsync('DROP TABLE IF EXISTS complaints;');
+    await database.execAsync('DROP TABLE IF EXISTS metadata;');
+    await database.execAsync('DROP TABLE IF EXISTS lostfound_items;');
+    await database.execAsync('DROP TABLE IF EXISTS lost_reports;');
+    await database.execAsync('DROP TABLE IF EXISTS claims;');
+    await database.closeAsync();
+  } catch {}
+  finally {
+    db = null;
+    dbInitPromise = null;
+  }
   await getDb();
 };

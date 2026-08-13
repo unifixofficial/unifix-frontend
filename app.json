@@ -6,15 +6,24 @@
     "orientation": "portrait",
     "scheme": "unifix",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#ffffff",
+      "dark": {
+        "image": "./assets/splash.png",
+        "backgroundColor": "#0f172a"
+      }
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.unifix.app"
+      "bundleIdentifier": "com.unifix.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Allow UniFiX to access your photo library to upload images.",
+        "NSCameraUsageDescription": "Allow UniFiX to access your camera to upload photos.",
+        "NSMicrophoneUsageDescription": "Allow UniFiX to access your microphone."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -27,7 +36,10 @@
       "allowBackup": false,
       "versionCode": 1,
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
@@ -47,13 +59,30 @@
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#10b981",
           "sounds": []
         }
       ],
       "expo-sqlite",
-      "expo-font",
-      "expo-web-browser"
+    "expo-font",
+      "@react-native-google-signin/google-signin",
+      "@react-native-firebase/app",
+      [
+        "@sentry/react-native",
+        {
+          "organization": "unifix-ut",
+          "project": "react-native"
+        }
+      ],
+      [
+        "@react-native-firebase/messaging",
+        {
+          "android": {
+            "notificationIcon": "./assets/notification.png",
+            "notificationColor": "#10b981"
+          }
+        }
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true
@@ -65,6 +94,9 @@
       "policy": "appVersion"
     },
     "extra": {
+      "sentry": {
+        "dsn": "https://65abf5b0fb560cdb4b6b8c4d6e4c6ff3@o4511512290066432.ingest.us.sentry.io/4511880487960576"
+      },
       "router": {},
       "eas": {
         "projectId": "4d7d0e4b-d763-41e9-833b-843af45047c7"

@@ -1,18 +1,9 @@
-import { getDb } from './database';
+import { mmkvGet, mmkvSet } from '../utils/mmkv';
 
-export const getMeta = async (key: string): Promise<string | null> => {
-  const db = await getDb();
-  const row = await db.getFirstAsync<{ value: string }>(
-    'SELECT value FROM metadata WHERE key = ?',
-    [key]
-  );
-  return row?.value ?? null;
-};
+export function getMeta(key: string): string | null {
+  return mmkvGet(key) ?? null;
+}
 
-export const setMeta = async (key: string, value: string): Promise<void> => {
-  const db = await getDb();
-  await db.runAsync(
-    'INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)',
-    [key, value]
-  );
-};
+export function setMeta(key: string, value: string): void {
+  mmkvSet(key, value);
+}

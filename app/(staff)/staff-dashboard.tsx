@@ -34,7 +34,8 @@ import { authAPI, complaintsAPI } from "../../services/api";
 
 import { useLoadingStore } from "@/store/loadingStore";
 import ScreenWrapper from "@/wrappers/ScreenWrapper";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getAccessToken } from '@/utils/secureAuth';
+import { mmkvGet, mmkvSet } from '@/utils/mmkv';
 import NetInfo from "@react-native-community/netinfo";
 import { getStaffComplaintsFromDb, syncStaffComplaints } from "../../sync/syncManager";
 import { loadUserCache } from "../../utils/cache";
@@ -349,20 +350,17 @@ const refetchAll = useCallback(async (uid: string, skipCache = false, silent = f
 
 useEffect(() => {
     const bootstrap = async () => {
-      const cachedUser = await loadUserCache();
+     const cachedUser = loadUserCache();
 
       if (cachedUser?.uid && !hasBootstrapped.current) {
         hasBootstrapped.current = true;
         setStaffUid(cachedUser.uid);
 
-        // load cached staff profile instantly
-        const cachedStaffStr = await AsyncStorage.getItem(`user_${cachedUser.uid}`);
-        if (cachedStaffStr) {
-          setStaffData(JSON.parse(cachedStaffStr));
+    const { mmkvGetJSON } = require('@/utils/mmkv');
+        const cachedStaff = mmkvGetJSON(`user_${cachedUser.uid}`);
+        if (cachedStaff) {
+          setStaffData(cachedStaff);
         }
-
-  // SQLite is the cache — read it directly, same as Admin does.
-        // Do not depend on loadCacheForce("staff_complaints") which is never written.
         const localComplaints = await getStaffComplaintsFromDb(cachedUser.uid);
         if (localComplaints.length > 0) {
           setAllComplaints(localComplaints as any);

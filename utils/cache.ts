@@ -1,49 +1,38 @@
+import { mmkvGet, mmkvSet, mmkvDelete, mmkvGetJSON, mmkvSetJSON } from './mmkv';
 
-import AsyncStorage from '@react-native-async-storage/async-storage'
+const USER_CACHE_KEY = 'unifix_cached_user';
+const USER_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 
-export async function saveCache(key: string, data: any): Promise<void> {
-  try {
-    await AsyncStorage.setItem(key, JSON.stringify({ data, savedAt: Date.now() }))
-  } catch {}
+export function saveCache(key: string, data: any): void {
+  mmkvSetJSON(key, { data, savedAt: Date.now() });
 }
 
-export async function saveUserCache(user: any): Promise<void> {
-  try {
-    // Merge with whatever's already cached (e.g. {uid, role, route} written
-    // by _layout.tsx for offline routing) instead of overwriting it —
-    // otherwise we wipe the fields needed to route offline on next launch.
-    const existingStr = await AsyncStorage.getItem("unifix_cached_user")
-    const existing = existingStr ? JSON.parse(existingStr) : {}
-    await AsyncStorage.setItem(
-      "unifix_cached_user",
-      JSON.stringify({ ...existing, ...user, cachedAt: Date.now() })
-    )
-  } catch {}
+export function saveUserCache(user: any): void {
+  const existing = mmkvGetJSON<any>(USER_CACHE_KEY) ?? {};
+  mmkvSetJSON(USER_CACHE_KEY, { ...existing, ...user, cachedAt: Date.now() });
 }
 
-export async function loadUserCache(): Promise<any | null> {
-  try {
-    const raw = await AsyncStorage.getItem("unifix_cached_user")
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    const AGE_LIMIT = 7 * 24 * 60 * 60 * 1000 // 7 days
-    if (Date.now() - (parsed.cachedAt ?? 0) > AGE_LIMIT) {
-      await AsyncStorage.removeItem("unifix_cached_user")
-      return null
-    }
-    return parsed
-  } catch { return null }
-}
-export async function loadCache(key: string, maxAgeMs = 10 * 60 * 1000, forceLoad = false): Promise<any | null> {
-  try {
-    const raw = await AsyncStorage.getItem(key)
-    if (!raw) return null
-    const { data, savedAt } = JSON.parse(raw)
-    if (!forceLoad && Date.now() - savedAt > maxAgeMs) return null
-    return data
-  } catch { return null }
+export function loadUserCache(): any | null {
+  const parsed = mmkvGetJSON<any>(USER_CACHE_KEY);
+  if (!parsed) return null;
+  if (Date.now() - (parsed.cachedAt ?? 0) > USER_CACHE_TTL) {
+    mmkvDelete(USER_CACHE_KEY);
+    return null;
+  }
+  return parsed;
 }
 
-export async function loadCacheForce(key: string): Promise<any | null> {
-  return loadCache(key, 0, true)
+export function loadCache(key: string, maxAgeMs = 10 * 60 * 1000, forceLoad = false): any | null {
+  const parsed = mmkvGetJSON<any>(key);
+  if (!parsed) return null;
+  if (!forceLoad && Date.now() - parsed.savedAt > maxAgeMs) return null;
+  return parsed.data;
+}
+
+export function loadCacheForce(key: string): any | null {
+  return loadCache(key, 0, true);
+}
+
+export function clearUserCache(): void {
+  mmkvDelete(USER_CACHE_KEY);
 }

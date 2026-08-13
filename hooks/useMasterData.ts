@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import { mmkvGetJSON, mmkvSetJSON } from '../utils/mmkv';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BASE_URL;
-const CACHE_KEY = 'unifix_master_data';
+const MMKV_KEY = 'master_data_cache';
+const MMKV_TS_KEY = 'master_data_fetched_at';
 const CACHE_TTL = 60 * 60 * 1000;
 
 export type SubCategory = { id: string; name: string };
@@ -32,41 +34,56 @@ async function fetchMaster(): Promise<MasterData> {
   const res = await fetch(`${BACKEND_URL}/master/all`);
   if (!res.ok) throw new Error('Failed to fetch master data');
   const json = await res.json();
-  return json.data as MasterData;
+  const d = json.data ?? json;
+  if (!d?.categories) throw new Error(`Bad response shape: ${JSON.stringify(json).slice(0, 200)}`);
+  return d as MasterData;
 }
 
-function readCache(): MasterData | null {
-  try {
-    const raw = require('@react-native-async-storage/async-storage').default;
-    return null;
-  } catch {
-    return null;
-  }
+function readMMKVCache(): MasterData | null {
+  const fetchedAt = mmkvGetJSON<number>(MMKV_TS_KEY);
+  if (!fetchedAt || Date.now() - fetchedAt > CACHE_TTL) return null;
+  return mmkvGetJSON<MasterData>(MMKV_KEY);
 }
 
-let memCache: { data: MasterData; at: number } | null = null;
+function writeMMKVCache(data: MasterData): void {
+  mmkvSetJSON(MMKV_KEY, data);
+  mmkvSetJSON(MMKV_TS_KEY, Date.now());
+}
 
 export function useMasterData(): State & { refetch: () => void } {
+  const cached = readMMKVCache();
   const [state, setState] = useState<State>({
-    data: memCache ? memCache.data : null,
-    loading: !memCache,
+    data: cached,
+    loading: !cached,
     error: null,
   });
   const mounted = useRef(true);
 
-  const load = async () => {
-    if (memCache && Date.now() - memCache.at < CACHE_TTL) {
-      setState({ data: memCache.data, loading: false, error: null });
+  const load = async (retries = 2) => {
+    const hit = readMMKVCache();
+    if (hit) {
+      setState({ data: hit, loading: false, error: null });
       return;
     }
-    setState(s => ({ ...s, loading: true }));
-    try {
-      const data = await fetchMaster();
-      memCache = { data, at: Date.now() };
-      if (mounted.current) setState({ data, loading: false, error: null });
-    } catch (e: any) {
-      if (mounted.current) setState(s => ({ ...s, loading: false, error: e.message }));
+    setState(s => ({ ...s, loading: true, error: null }));
+    let lastErr: any;
+    for (let i = 0; i <= retries; i++) {
+      try {
+        const data = await fetchMaster();
+        writeMMKVCache(data);
+        if (mounted.current) setState({ data, loading: false, error: null });
+        return;
+      } catch (e: any) {
+        lastErr = e;
+        if (i < retries) await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+      }
     }
+    const stale = mmkvGetJSON<MasterData>(MMKV_KEY);
+    if (stale && mounted.current) {
+      setState({ data: stale, loading: false, error: null });
+      return;
+    }
+    if (mounted.current) setState(s => ({ ...s, loading: false, error: lastErr?.message ?? 'Failed' }));
   };
 
   useEffect(() => {
@@ -75,20 +92,13 @@ export function useMasterData(): State & { refetch: () => void } {
     return () => { mounted.current = false; };
   }, []);
 
-  return { ...state, refetch: load };
+  return { ...state, refetch: () => load() };
 }
 
 export function resolveRoom(buildings: Building[], roomNumber: string): { building: string; label: string } | null {
   for (const b of buildings) {
     const room = b.rooms.find(r => r.roomNumber.toUpperCase() === roomNumber.toUpperCase());
-    if (room) {
-      const num = parseInt(roomNumber.replace(/\D/g, ''), 10);
-      const floor = Math.floor(num / 100);
-      return {
-        building: floor === 0 ? 'Ground Floor' : `Floor ${floor}`,
-        label: room.roomName,
-      };
-    }
+    if (room) return { building: b.name, label: room.roomName };
   }
   return null;
 }

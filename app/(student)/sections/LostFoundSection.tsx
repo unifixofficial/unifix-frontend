@@ -400,7 +400,7 @@ const handlePostFoundRoomInput = useCallback((val: string) => {
         photoUrl = data.secure_url;
         setPostFoundUploadingPhoto(false);
       }
-      await lostFoundAPI.postItem({
+await lostFoundAPI.postItem({
         itemName: postFoundItemName.trim(),
         category: postFoundCategory,
         description: postFoundDescription.trim(),
@@ -412,6 +412,7 @@ const handlePostFoundRoomInput = useCallback((val: string) => {
       setShowPostFoundModal(false);
       resetPostFoundForm();
       onSetLfActiveTab("feed");
+      await onForceRefreshFeed();
       onRefresh();
     } catch (err: any) {
       setPostFoundError(
@@ -468,10 +469,11 @@ const handlePostFoundRoomInput = useCallback((val: string) => {
         howToReach: postLostHowToReach.trim(),
         images: imageUrl ? [imageUrl] : [],
       });
-      setShowPostLostModal(false);
+   setShowPostLostModal(false);
       resetPostLostForm();
       onSetLfActiveTab("lostreports");
-      onForceRefreshLostReports();
+      await onForceRefreshLostReports();
+      onRefresh();
     } catch (err: any) {
       setPostLostError(err.message || "Failed to post. Check your connection.");
     } finally {
