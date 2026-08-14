@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons"
 import { useRouter } from "expo-router"
 import { useEffect, useState } from "react"
-import { ActivityIndicator, Alert, FlatList, Image, Modal, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native"
-import { getAccessToken } from "@/utils/secureAuth"
+import { ActivityIndicator, FlatList, Image, Modal, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native"
+import { getValidAccessToken } from "@/utils/secureAuth"
 
 async function getToken() {
-  const token = await getAccessToken()
+const token = await getValidAccessToken()
   if (!token) throw new Error("Not authenticated")
   return token
 }
@@ -22,7 +22,8 @@ export default function MaintenanceScreen() {
 const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [zoomImage, setZoomImage] = useState<string | null>(null)
   const [rejectModal, setRejectModal] = useState<{ uid: string; name: string } | null>(null)
-  const [rejectReason, setRejectReason] = useState("")
+const [rejectReason, setRejectReason] = useState("")
+  const [rejectReasonError, setRejectReasonError] = useState("")
 
   async function fetchStaff(silent = false) {
     try {
@@ -59,11 +60,12 @@ async function handleAction(uid: string, action: "approve" | "reject", rejection
     setRejectModal({ uid, name })
   }
 
-  async function submitRejection() {
+async function submitRejection() {
     if (!rejectReason.trim()) {
-      Alert.alert("Required", "Please enter a rejection reason.")
+      setRejectReasonError("Please enter a rejection reason.")
       return
     }
+    setRejectReasonError("")
     if (!rejectModal) return
     setRejectModal(null)
     await handleAction(rejectModal.uid, "reject", rejectReason)
@@ -79,17 +81,18 @@ return (
           <View style={s.rejectSheet}>
             <Text style={s.rejectSheetTitle}>Reject Staff</Text>
             <Text style={s.rejectSheetSub}>Provide a reason for rejecting <Text style={{ fontWeight: "800", color: "#1a3c2e" }}>{rejectModal?.name}</Text>. This will be sent to them via email.</Text>
-            <TextInput
-              style={s.rejectInput}
+    <TextInput
+              style={[s.rejectInput, rejectReasonError ? { borderColor: "#dc2626" } : {}]}
               placeholder="e.g. ID card not clear, invalid certificate..."
               placeholderTextColor="#94a3b8"
               value={rejectReason}
-              onChangeText={setRejectReason}
+              onChangeText={(t) => { setRejectReason(t); if (rejectReasonError) setRejectReasonError("") }}
               multiline
               numberOfLines={4}
               textAlignVertical="top"
               autoFocus
             />
+            {rejectReasonError ? <Text style={s.inlineError}>{rejectReasonError}</Text> : null}
             <View style={s.rejectSheetActions}>
               <TouchableOpacity style={s.rejectCancelBtn} onPress={() => setRejectModal(null)}>
                 <Text style={s.rejectCancelText}>Cancel</Text>
@@ -273,5 +276,6 @@ zoomImage: { width: 380, height: 600 },
   rejectCancelBtn: { flex: 1, backgroundColor: "#f1f5f9", borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   rejectCancelText: { fontSize: 14, fontWeight: "700", color: "#64748b" },
   rejectConfirmBtn: { flex: 1, backgroundColor: "#ef4444", borderRadius: 12, paddingVertical: 13, alignItems: "center" },
-  rejectConfirmText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+rejectConfirmText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+  inlineError: { fontSize: 12, color: "#dc2626", fontWeight: "600", marginTop: -10, marginBottom: 10 },
 })

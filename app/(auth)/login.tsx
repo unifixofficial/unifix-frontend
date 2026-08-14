@@ -68,7 +68,7 @@ export default function LoginScreen() {
     router.replace(route as any);
   };
 
-  const handleLogin = async () => {
+const handleLogin = async () => {
     setError("");
     setResetMessage("");
     if (!email.trim()) return setError("Please enter your email.");
@@ -78,12 +78,15 @@ export default function LoginScreen() {
       const data = await authAPI.login(email.trim(), password);
       await navigateByUser(data.user, data.token, data.refreshToken);
     } catch (err: any) {
-      setError(err.message || "Login failed. Please try again.");
+      if (err.code === "GOOGLE_ACCOUNT") {
+        setError("Your email is verified with Google. Please continue with Google.");
+      } else {
+        setError(err.message || "Login failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
   };
-
   const handleGoogleSignIn = async () => {
     setError("");
     setGoogleLoading(true);
@@ -114,10 +117,17 @@ export default function LoginScreen() {
       const token = data.token ?? data.data?.token;
       const refreshToken = data.refreshToken ?? data.data?.refreshToken;
 
- if (userData.isNewUser || !userData.role) {
+if (!userData.role) {
         await setAccessToken(token);
         await setRefreshToken(refreshToken);
         router.replace("/select-role" as any);
+        return;
+      }
+
+      if (!userData.profileCompleted) {
+        await setAccessToken(token);
+        await setRefreshToken(refreshToken);
+        router.replace("/complete-profile" as any);
         return;
       }
       await navigateByUser(userData, token, refreshToken);
@@ -136,7 +146,7 @@ export default function LoginScreen() {
     }
   };
 
-  const handleForgotPassword = async () => {
+const handleForgotPassword = async () => {
     setError("");
     setResetMessage("");
     if (!email.trim()) return setError("Enter your email above, then tap Forgot Password.");
@@ -151,7 +161,11 @@ export default function LoginScreen() {
         });
       }, 1500);
     } catch (err: any) {
-      setError(err.message || "Could not send OTP.");
+      if (err.code === "GOOGLE_ACCOUNT") {
+        setError("Your email is verified with Google. Please continue with Google.");
+      } else {
+        setError(err.message || "Could not send OTP.");
+      }
     } finally {
       setForgotLoading(false);
     }

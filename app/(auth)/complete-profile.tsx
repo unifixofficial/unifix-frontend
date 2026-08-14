@@ -4,10 +4,10 @@ import { saveUserCache, clearUserCache } from '@/utils/cache';
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
+import AttachmentPickerModal from "@/components/AttachmentPickerModal";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -320,9 +320,10 @@ const [uid, setUid] = useState<string | null>(null);
   const [designation, setDesignation] = useState("");
   const [experience, setExperience] = useState("");
   const [phone, setPhone] = useState("");
-  const [idCard, setIdCard] = useState<FileItem>(null);
+const [idCard, setIdCard] = useState<FileItem>(null);
   const [certificate, setCertificate] = useState<FileItem>(null);
   const [teacherIdCard, setTeacherIdCard] = useState<FileItem>(null);
+  const [fromRoleSelect, setFromRoleSelect] = useState(false);
 
 useEffect(() => {
 getAccessToken().then(async (token) => {
@@ -332,9 +333,15 @@ getAccessToken().then(async (token) => {
       }
       try {
         const res = await authAPI.myProfile();
-        const data = res.profile;
+ const data = res.profile;
         setUid(data.id);
         setRole(data.role || "");
+        if (!data.profileCompleted) {
+          setFromRoleSelect(true);
+        }
+        if (data.firebaseUid && !data.profileCompleted) {
+          setFromRoleSelect(true);
+        }
         if (data.role === "staff") {
           if (data.verificationStatus === "pending" && data.profileCompleted)
             setPendingApproval(true);
@@ -348,17 +355,13 @@ getAccessToken().then(async (token) => {
       }
     });
   }, []);
+const [activeFileSetter, setActiveFileSetter] = useState<((f: FileItem) => void) | null>(null);
+  const [filePickerVisible, setFilePickerVisible] = useState(false);
 
   const pickImage = async (setter: (f: FileItem) => void) => {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert(
-          "Permission Required",
-          "Please allow photo library access.",
-        );
-        return;
-      }
+      if (!perm.granted) return;
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
@@ -368,9 +371,7 @@ getAccessToken().then(async (token) => {
       const asset = result.assets[0];
       const name = asset.uri.split("/").pop() || `file_${Date.now()}.jpg`;
       setter({ name, uri: asset.uri, preview: asset.uri });
-    } catch {
-      Alert.alert("Error", "Failed to pick image.");
-    }
+    } catch {}
   };
 
   const pickDocument = async (setter: (f: FileItem) => void) => {
@@ -382,17 +383,12 @@ getAccessToken().then(async (token) => {
       if (result.canceled) return;
       const file = result.assets[0];
       setter({ name: file.name, uri: file.uri });
-    } catch {
-      Alert.alert("Error", "Failed to pick file.");
-    }
+    } catch {}
   };
 
   const pickFile = (setter: (f: FileItem) => void) => {
-    Alert.alert("Upload From", "Choose source", [
-      { text: "Photo Library", onPress: () => pickImage(setter) },
-      { text: "Files (PDF/Doc)", onPress: () => pickDocument(setter) },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    setActiveFileSetter(() => setter);
+    setFilePickerVisible(true);
   };
 
   const validatePhone = (p: string) => /^[6-9]\d{9}$/.test(p);
@@ -617,8 +613,8 @@ const token = await getAccessToken();
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       <View style={s.root}>
         <View style={s.header}>
-          <TouchableOpacity
-            onPress={() => router.replace("/login" as any)}
+<TouchableOpacity
+            onPress={() => fromRoleSelect ? router.replace("/select-role" as any) : router.replace("/login" as any)}
             style={s.backBtn}
           >
             <Ionicons name="arrow-back" size={18} color="#0f172a" />
@@ -851,9 +847,24 @@ const token = await getAccessToken();
               <Text style={s.saveBtnText}>Save Profile</Text>
             )}
           </TouchableOpacity>
-          <Text style={s.footer}>UNIFIX PLATFORM</Text>
+<Text style={s.footer}>UNIFIX PLATFORM</Text>
         </ScrollView>
       </View>
+<AttachmentPickerModal
+        visible={filePickerVisible}
+        title="UPLOAD FROM"
+        galleryLabel="Photo Library"
+        cameraLabel="Files (PDF / Image)"
+        onClose={() => setFilePickerVisible(false)}
+        onGallery={() => {
+          setFilePickerVisible(false);
+          if (activeFileSetter) setTimeout(() => pickImage(activeFileSetter), 50);
+        }}
+        onCamera={() => {
+          setFilePickerVisible(false);
+          if (activeFileSetter) setTimeout(() => pickDocument(activeFileSetter), 50);
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

@@ -1,4 +1,4 @@
-import { getAccessToken } from '@/utils/secureAuth';
+import { getValidAccessToken } from '@/utils/secureAuth';
 import { Ionicons } from "@expo/vector-icons";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -158,7 +158,7 @@ const fetchStaffDetails = useCallback(async () => {
     if (!r.uid) continue;
     try {
 const base = process.env.EXPO_PUBLIC_BASE_URL;
-const token = await getAccessToken();
+const token = await getValidAccessToken();
       if (!token) continue;
 
       const res = await fetch(`${base}/admin/user/${r.uid}`, {

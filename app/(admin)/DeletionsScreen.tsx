@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons"
 import { useRouter } from "expo-router"
 import { useEffect, useState } from "react"
-import { ActivityIndicator, Alert, FlatList, RefreshControl, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native"
-import { getAccessToken } from "@/utils/secureAuth"
+import { ActivityIndicator, FlatList, RefreshControl, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native"
+import { getValidAccessToken } from "@/utils/secureAuth"
+import ConfirmModal from "@/components/ConfirmModal"
 
 async function getToken() {
-  const token = await getAccessToken()
+ const token = await getValidAccessToken()
   if (!token) throw new Error("Not authenticated")
   return token
 }
@@ -16,7 +17,8 @@ export default function DeletionsScreen() {
   const [tab, setTab] = useState<"pending" | "logs">("pending")
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
+const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [confirmModal, setConfirmModal] = useState<{ visible: boolean; requestId: string; action: "approve" | "reject" } | null>(null)
 
   async function fetchData(silent = false) {
     try {
@@ -31,28 +33,26 @@ export default function DeletionsScreen() {
     finally { setLoading(false) }
   }
 
-  async function handleAction(requestId: string, action: "approve" | "reject") {
-    Alert.alert(
-      action === "approve" ? "Approve Deletion" : "Reject Deletion",
-      action === "approve" ? "This will permanently delete the account. Continue?" : "Reject this deletion request?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: action === "approve" ? "Delete" : "Reject", style: "destructive", onPress: async () => {
-          try {
-            setActionLoading(requestId)
-            const token = await getToken()
-            const endpoint = action === "approve" ? "/admin/approve-deletion" : "/admin/reject-deletion"
-            await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}${endpoint}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ requestId, reason: "Processed by admin." }),
-            })
-            await fetchData(true)
-          } catch {}
-          finally { setActionLoading(null) }
-        }},
-      ]
-    )
+function handleAction(requestId: string, action: "approve" | "reject") {
+    setConfirmModal({ visible: true, requestId, action })
+  }
+
+  async function executeAction() {
+    if (!confirmModal) return
+    const { requestId, action } = confirmModal
+    setConfirmModal(null)
+    try {
+      setActionLoading(requestId)
+      const token = await getToken()
+      const endpoint = action === "approve" ? "/admin/approve-deletion" : "/admin/reject-deletion"
+      await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ requestId, reason: "Processed by admin." }),
+      })
+      await fetchData(true)
+    } catch {}
+    finally { setActionLoading(null) }
   }
 
   useEffect(() => { fetchData() }, [])
@@ -149,7 +149,18 @@ export default function DeletionsScreen() {
             )
           }}
         />
-      )}
+)}
+      <ConfirmModal
+        visible={!!confirmModal?.visible}
+        variant="confirm"
+        destructive
+        title={confirmModal?.action === "approve" ? "Approve Deletion" : "Reject Deletion"}
+        message={confirmModal?.action === "approve" ? "This will permanently delete the account. Continue?" : "Reject this deletion request?"}
+        confirmText={confirmModal?.action === "approve" ? "Delete" : "Reject"}
+        cancelText="Cancel"
+        onCancel={() => setConfirmModal(null)}
+        onConfirm={executeAction}
+      />
     </View>
   )
 }

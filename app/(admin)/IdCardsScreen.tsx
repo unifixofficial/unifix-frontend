@@ -2,10 +2,10 @@ import { Ionicons } from "@expo/vector-icons"
 import { useRouter } from "expo-router"
 import { useEffect, useState } from "react"
 import { ActivityIndicator, FlatList, Image, Modal, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native"
-import { getAccessToken } from "@/utils/secureAuth"
+import { getValidAccessToken } from "@/utils/secureAuth"
 
 async function getToken() {
-  const token = await getAccessToken()
+const token = await getValidAccessToken()
   if (!token) throw new Error("Not authenticated")
   return token
 }

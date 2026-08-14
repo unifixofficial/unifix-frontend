@@ -50,9 +50,10 @@ interface ComplaintsSectionProps {
   onSetFilterTab: (tab: FilterTab) => void;
   onCall: (phone: string | null, name: string | null) => void;
   bottomNavHeight: number;
-  onComplaintsRefreshed?: (fresh: Complaint[]) => void;
+  topInset: number;
+onComplaintsRefreshed?: (fresh: Complaint[]) => void;
+  onReportIssue?: () => void;
 }
-
 const STATUS_CONFIG: Record<
   string,
   {
@@ -154,7 +155,9 @@ export default memo(function ComplaintsSection({
   onSetFilterTab,
   onCall,
   bottomNavHeight,
-  onComplaintsRefreshed,
+  topInset,
+onComplaintsRefreshed,
+  onReportIssue,
 }: ComplaintsSectionProps) {
    
   const router = useRouter();
@@ -171,8 +174,8 @@ export default memo(function ComplaintsSection({
   const [ratingComment, setRatingComment] = useState("");
   const [ratingLoading, setRatingLoading] = useState(false);
   const [ratingError, setRatingError] = useState("");
-
-const [trackingRefreshing, setTrackingRefreshing] = useState(false);
+const [imageViewerUri, setImageViewerUri] = useState<string | null>(null);
+  const [trackingRefreshing, setTrackingRefreshing] = useState(false);
 const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 const pollComplaint = useCallback(async (id: string) => {
@@ -273,8 +276,8 @@ const updated = await complaintsAPI.getById(complaint.id);
 
   return (
     <>
-      <View style={styles.fullTab}>
-        <View style={styles.tabHeader}>
+   <View style={styles.fullTab}>
+        <View style={[styles.tabHeader, { paddingTop: topInset + 14 }]}>
           <Text style={styles.tabHeaderTitle}>My Complaints</Text>
         </View>
         <View style={styles.filterRow}>
@@ -344,9 +347,9 @@ const updated = await complaintsAPI.getById(complaint.id);
                   />
                 </View>
                 <Text style={styles.emptyStateTitle}>No complaints found</Text>
-                <TouchableOpacity
+        <TouchableOpacity
                   style={styles.actionBtn}
-                  onPress={() => router.push("/submit-complaint" as any)}
+                  onPress={() => onReportIssue?.()}
                 >
                   <Text style={styles.actionBtnText}>Report an Issue</Text>
                 </TouchableOpacity>
@@ -422,12 +425,14 @@ const updated = await complaintsAPI.getById(complaint.id);
                             </View>
                           )}
                       </View>
-                      {complaint.photoUrl ? (
-                        <Image
-                          source={{ uri: complaint.photoUrl }}
-                          style={styles.complaintThumb}
-                          resizeMode="cover"
-                        />
+                {complaint.photoUrl ? (
+                        <TouchableOpacity onPress={() => setImageViewerUri(complaint.photoUrl!)} activeOpacity={0.85}>
+                          <Image
+                            source={{ uri: complaint.photoUrl }}
+                            style={styles.complaintThumb}
+                            resizeMode="cover"
+                          />
+                        </TouchableOpacity>
                       ) : (
                         <View
                           style={[
@@ -563,7 +568,16 @@ const updated = await complaintsAPI.getById(complaint.id);
         )}
       </View>
 
-        {/* Tracking Modal */}
+<Modal visible={!!imageViewerUri} animationType="slide" onRequestClose={() => setImageViewerUri(null)}>
+        <View style={{ flex: 1, backgroundColor: "#000" }}>
+          <TouchableOpacity style={{ position: "absolute", top: 52, right: 20, zIndex: 10, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" }} onPress={() => setImageViewerUri(null)}>
+            <Ionicons name="close" size={22} color="#fff" />
+          </TouchableOpacity>
+          {imageViewerUri && (
+            <Image source={{ uri: imageViewerUri }} style={{ flex: 1, width: "100%" }} resizeMode="contain" />
+          )}
+        </View>
+      </Modal>
 {trackingVisible && <Modal
   visible={trackingVisible}
   animationType="slide"
@@ -970,12 +984,12 @@ const updated = await complaintsAPI.getById(complaint.id);
 
 const styles = StyleSheet.create({
   fullTab: { flex: 1, backgroundColor: "#f8fafc" },
-  tabHeader: {
+tabHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingBottom: 14,
     backgroundColor: "#ffffff",
     borderBottomWidth: 1,
     borderBottomColor: "#f1f5f9",

@@ -34,9 +34,7 @@ import { authAPI, complaintsAPI } from "../../services/api";
 
 import { useLoadingStore } from "@/store/loadingStore";
 import ScreenWrapper from "@/wrappers/ScreenWrapper";
-import { getAccessToken } from '@/utils/secureAuth';
-import { mmkvGet, mmkvSet } from '@/utils/mmkv';
-import NetInfo from "@react-native-community/netinfo";
+import { getValidAccessToken } from '@/utils/secureAuth';
 import { getStaffComplaintsFromDb, syncStaffComplaints } from "../../sync/syncManager";
 import { loadUserCache } from "../../utils/cache";
 
@@ -350,7 +348,7 @@ const refetchAll = useCallback(async (uid: string, skipCache = false, silent = f
 
 useEffect(() => {
     const bootstrap = async () => {
-     const cachedUser = loadUserCache();
+      const cachedUser = await loadUserCache();
 
       if (cachedUser?.uid && !hasBootstrapped.current) {
         hasBootstrapped.current = true;

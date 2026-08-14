@@ -1,11 +1,11 @@
 import { useLoadingStore } from "@/store/loadingStore";
 import { Ionicons } from "@expo/vector-icons";
-import { getAccessToken } from '@/utils/secureAuth';
+import { getValidAccessToken } from '@/utils/secureAuth';
 import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ConfirmModal from "@/components/ConfirmModal";
 import {
-  Alert,
   AppState, AppStateStatus,
   StatusBar,
   StyleSheet,
@@ -13,7 +13,8 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import Toast from "react-native-toast-message";
+import Toast from "@/components/Toast";
+import { useToast } from "@/hooks/useToast";
 import { authAPI } from "../../services/api";
 import { getAdminComplaintsFromDb, syncAdminComplaints } from "../../sync/syncManager";
 import AdminComplaintsScreen from "./AdminComplaintsScreen";
@@ -41,8 +42,24 @@ const [activeTab, setActiveTab] = useState<TabName>(
   const [pendingStaff, setPendingStaff] = useState<any[]>([]);
   const [approvingUid, setApprovingUid] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+const [refreshing, setRefreshing] = useState(false);
   const [adminData, setAdminData] = useState<any>(null);
+  const [dashAlertVisible, setDashAlertVisible] = useState(false);
+  const [dashAlertConfig, setDashAlertConfig] = useState<{
+    variant: "success" | "error" | "confirm";
+    title: string;
+    message: string;
+    destructive?: boolean;
+    confirmText?: string;
+    onConfirm?: () => void;
+  }>({ variant: "info" as any, title: "", message: "" });
+const [resolveComplaintId, setResolveComplaintId] = useState<string | null>(null);
+  const { toast, toastProps } = useToast();
+
+  const showDashAlert = (config: typeof dashAlertConfig) => {
+    setDashAlertConfig(config);
+    setDashAlertVisible(true);
+  };
 const [loading, setLoading] = useState(true);
   const [dataReady, setDataReady] = useState(false);
 const hasFetchedRef = useRef(false);
@@ -52,7 +69,7 @@ const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef = useRef(true);
 
 async function getAdminToken(): Promise<string> {
-    const token = await getAccessToken();
+    const token = await getValidAccessToken();
     if (!token) throw new Error("Not authenticated");
     return token;
   }
@@ -148,7 +165,7 @@ useEffect(() => {
 
 useEffect(() => {
     mountedRef.current = true;
-    getAccessToken().then((token) => {
+    getValidAccessToken().then((token) => {
       if (token) {
         fetchAdminData();
         registerAdminPushToken();
@@ -221,10 +238,10 @@ useEffect(() => {
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.message);
-      Alert.alert("Success", `Staff ${action === "approve" ? "approved" : "rejected"} successfully.`);
+showDashAlert({ variant: "success", title: "Success", message: `Staff ${action === "approve" ? "approved" : "rejected"} successfully.`, confirmText: "OK", onConfirm: () => setDashAlertVisible(false) });
       await fetchAdminData();
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Action failed");
+      showDashAlert({ variant: "error", title: "Error", message: e.message || "Action failed", confirmText: "OK", onConfirm: () => setDashAlertVisible(false) });
     } finally {
       setApprovingUid(null);
     }
@@ -242,58 +259,68 @@ const handleIWillHandle = useCallback(async (complaintId: string) => {
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.message);
-      Toast.show({ type: "success", text1: "I Will Handle", text2: "You are now handling this complaint.", position: "bottom" });
+   toast("You are now handling this complaint.", "success");
       const { setMeta } = await import('../../db/metadataDb');
       await setMeta('admin_complaints_hash', '');
       await fetchAdminData();
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Action failed");
+showDashAlert({ variant: "error", title: "Error", message: e.message || "Action failed", confirmText: "OK", onConfirm: () => setDashAlertVisible(false) });
     } finally {
       setActionLoading(null);
     }
   }, [fetchAdminData]);
 
-  const handleMarkResolved = useCallback(async (complaintId: string) => {
-    Alert.alert(
-      "Mark as Resolved",
-      "This will mark the complaint as completed and notify the student. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Resolve",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setActionLoading("resolve_" + complaintId);
-              const token = await getAdminToken();
-              const base = process.env.EXPO_PUBLIC_BASE_URL;
-            const res = await fetch(`${base}/admin/mark-flag-resolved`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ complaintId }),
-              });
-              const result = await res.json();
-              if (!result.success) throw new Error(result.message);
-              Toast.show({ type: "success", text1: "Resolved", text2: "Complaint marked as resolved. Student notified.", position: "bottom" });
-              const { setMeta } = await import('../../db/metadataDb');
-              await setMeta('admin_complaints_hash', '');
-              await fetchAdminData();
-            } catch (e: any) {
-              Toast.show({ type: "error", text1: "Error", text2: e.message || "Action failed", position: "bottom" });
-            } finally {
-              setActionLoading(null);
-            }
-          },
-        },
-      ]
-    );
+  const handleMarkResolved = useCallback((complaintId: string) => {
+    setResolveComplaintId(complaintId);
+    showDashAlert({
+      variant: "confirm",
+      title: "Mark as Resolved",
+      message: "This will mark the complaint as completed and notify the student. Continue?",
+      confirmText: "Resolve",
+      destructive: true,
+      onConfirm: async () => {
+        setDashAlertVisible(false);
+        try {
+          setActionLoading("resolve_" + complaintId);
+          const token = await getAdminToken();
+          const base = process.env.EXPO_PUBLIC_BASE_URL;
+          const res = await fetch(`${base}/admin/mark-flag-resolved`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ complaintId }),
+          });
+          const result = await res.json();
+          if (!result.success) throw new Error(result.message);
+        toast("Complaint marked as resolved. Student notified.", "success");
+          const { setMeta } = await import('../../db/metadataDb');
+          await setMeta('admin_complaints_hash', '');
+          await fetchAdminData();
+        } catch (e: any) {
+       toast(e.message || "Action failed", "error");
+        } finally {
+          setActionLoading(null);
+        }
+      },
+    });
   }, [fetchAdminData]);
 const flaggedCount = useMemo(() => flaggedComplaints.length, [flaggedComplaints]);
   const pendingStaffCount = useMemo(() => pendingStaff.length, [pendingStaff]);
 
 
-  return (
-    <View style={styles.root}>
+return (
+  <View style={styles.root}>
+        <Toast {...toastProps} />
+        <ConfirmModal
+          visible={dashAlertVisible}
+          variant={dashAlertConfig.variant}
+          title={dashAlertConfig.title}
+          message={dashAlertConfig.message}
+          confirmText={dashAlertConfig.confirmText ?? "OK"}
+          cancelText="Cancel"
+          destructive={dashAlertConfig.destructive}
+          onConfirm={dashAlertConfig.onConfirm ?? (() => setDashAlertVisible(false))}
+          onCancel={dashAlertConfig.variant === "confirm" ? () => setDashAlertVisible(false) : undefined}
+        />
         <StatusBar barStyle="dark-content" backgroundColor="#f0fdf4" />
 
         <View style={styles.screenContainer}>

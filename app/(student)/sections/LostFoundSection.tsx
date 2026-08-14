@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import React, { memo, useCallback, useState } from "react";
+import AttachmentPickerModal from "@/components/AttachmentPickerModal";
+
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -154,9 +155,11 @@ export default memo(function LostFoundSection({
   const [handedToName, setHandedToName] = useState("");
   const [handoverLoading, setHandoverLoading] = useState(false);
   const [handoverError, setHandoverError] = useState("");
-  const [showPostSheet, setShowPostSheet] = useState(false);
+const [showPostSheet, setShowPostSheet] = useState(false);
   const [showPostFoundModal, setShowPostFoundModal] = useState(false);
   const [showPostLostModal, setShowPostLostModal] = useState(false);
+  const [foundPickerVisible, setFoundPickerVisible] = useState(false);
+  const [lostPickerVisible, setLostPickerVisible] = useState(false);
 
   const [postFoundItemName, setPostFoundItemName] = useState("");
   const [postFoundCategory, setPostFoundCategory] = useState("Others");
@@ -251,124 +254,82 @@ const handlePostFoundRoomInput = useCallback((val: string) => {
     }
   }, []);
 
-  const handlePostFoundPickPhoto = useCallback(async () => {
-    Alert.alert("Add Photo", "Choose an option", [
-      {
-        text: "Take Photo",
-        onPress: async () => {
-          try {
-            const perm = await ImagePicker.requestCameraPermissionsAsync();
-            if (!perm.granted) {
-              Alert.alert("Permission Required", "Please allow camera access.");
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              allowsEditing: true,
-              quality: 0.8,
-            });
-            if (result.canceled) return;
-            const asset = result.assets[0];
-            setPostFoundPhoto({
-              uri: asset.uri,
-              name: asset.uri.split("/").pop() || `lostfound_${Date.now()}.jpg`,
-            });
-          } catch {
-            Alert.alert("Error", "Failed to open camera.");
-          }
-        },
-      },
-      {
-        text: "Choose from Gallery",
-        onPress: async () => {
-          try {
-            const perm =
-              await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (!perm.granted) {
-              Alert.alert(
-                "Permission Required",
-                "Please allow photo library access.",
-              );
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              quality: 0.8,
-            });
-            if (result.canceled) return;
-            const asset = result.assets[0];
-            setPostFoundPhoto({
-              uri: asset.uri,
-              name: asset.uri.split("/").pop() || `lostfound_${Date.now()}.jpg`,
-            });
-          } catch {
-            Alert.alert("Error", "Failed to pick photo.");
-          }
-        },
-      },
-      { text: "Cancel", style: "cancel" },
-    ]);
+const handlePostFoundPickPhoto = useCallback(() => {
+    setFoundPickerVisible(true);
   }, []);
 
-  const handlePostLostPickPhoto = useCallback(async () => {
-    Alert.alert("Add Photo", "Choose an option", [
-      {
-        text: "Take Photo",
-        onPress: async () => {
-          try {
-            const perm = await ImagePicker.requestCameraPermissionsAsync();
-            if (!perm.granted) {
-              Alert.alert("Permission Required", "Please allow camera access.");
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              allowsEditing: true,
-              quality: 0.8,
-            });
-            if (result.canceled) return;
-            const asset = result.assets[0];
-            setPostLostPhoto({
-              uri: asset.uri,
-              name:
-                asset.uri.split("/").pop() || `lostreport_${Date.now()}.jpg`,
-            });
-          } catch {
-            Alert.alert("Error", "Failed to open camera.");
-          }
-        },
-      },
-      {
-        text: "Choose from Gallery",
-        onPress: async () => {
-          try {
-            const perm =
-              await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (!perm.granted) {
-              Alert.alert(
-                "Permission Required",
-                "Please allow photo library access.",
-              );
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              quality: 0.8,
-            });
-            if (result.canceled) return;
-            const asset = result.assets[0];
-            setPostLostPhoto({
-              uri: asset.uri,
-              name:
-                asset.uri.split("/").pop() || `lostreport_${Date.now()}.jpg`,
-            });
-          } catch {
-            Alert.alert("Error", "Failed to pick photo.");
-          }
-        },
-      },
-      { text: "Cancel", style: "cancel" },
-    ]);
+  const handlePostFoundGallery = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      setPostFoundPhoto({
+        uri: asset.uri,
+        name: asset.uri.split("/").pop() || `lostfound_${Date.now()}.jpg`,
+      });
+    } catch {}
+  }, []);
+
+  const handlePostFoundCamera = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) return;
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      setPostFoundPhoto({
+        uri: asset.uri,
+        name: asset.uri.split("/").pop() || `lostfound_${Date.now()}.jpg`,
+      });
+    } catch {}
+  }, []);
+
+  const handlePostLostPickPhoto = useCallback(() => {
+    setLostPickerVisible(true);
+  }, []);
+
+  const handlePostLostGallery = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      setPostLostPhoto({
+        uri: asset.uri,
+        name: asset.uri.split("/").pop() || `lostreport_${Date.now()}.jpg`,
+      });
+    } catch {}
+  }, []);
+
+  const handlePostLostCamera = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) return;
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      setPostLostPhoto({
+        uri: asset.uri,
+        name: asset.uri.split("/").pop() || `lostreport_${Date.now()}.jpg`,
+      });
+    } catch {}
   }, []);
   const handlePostFoundSubmit = useCallback(async () => {
     setPostFoundError("");
@@ -422,7 +383,7 @@ await lostFoundAPI.postItem({
       setPostFoundSubmitting(false);
       setPostFoundUploadingPhoto(false);
     }
-  }, [postFoundItemName, postFoundResolvedRoom, postFoundCollectLocation, postFoundPhoto, postFoundCategory, postFoundDescription, postFoundRoomInput, onSetLfActiveTab, onRefresh]);
+}, [postFoundItemName, postFoundResolvedRoom, postFoundCollectLocation, postFoundPhoto, postFoundCategory, postFoundDescription, postFoundRoomInput, onSetLfActiveTab, onRefresh, onForceRefreshFeed]);
 
   const handlePostLostSubmit = useCallback(async () => {
     setPostLostError("");
@@ -2580,6 +2541,18 @@ await lostFoundAPI.postItem({
           </View>
 </KeyboardAvoidingView>
       </Modal>}
+<AttachmentPickerModal
+        visible={foundPickerVisible}
+        onClose={() => setFoundPickerVisible(false)}
+        onGallery={handlePostFoundGallery}
+        onCamera={handlePostFoundCamera}
+      />
+      <AttachmentPickerModal
+        visible={lostPickerVisible}
+        onClose={() => setLostPickerVisible(false)}
+        onGallery={handlePostLostGallery}
+        onCamera={handlePostLostCamera}
+      />
    </View>
   );
 });

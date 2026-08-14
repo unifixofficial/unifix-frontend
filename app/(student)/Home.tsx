@@ -1,13 +1,15 @@
 import ScreenWrapper from "@/wrappers/ScreenWrapper";
 import { Ionicons } from "@expo/vector-icons";
 import { clearAuthTokens } from '@/utils/secureAuth';
+import Toast from "@/components/Toast";
+import ConfirmModal from "@/components/ConfirmModal";
+import CallConfirmationModal from "@/components/CallConfirmationModal";
 import { mmkvDelete } from '@/utils/mmkv';
 import * as Notifications from "expo-notifications";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Animated,
   AppState, AppStateStatus,
   Dimensions,
@@ -355,7 +357,9 @@ function ImageViewer({
 export default memo(function DashboardScreen() {
   const insets = useSafeAreaInsets();
 const [userData, setUserData] = useState<UserData | null>(null);
-const hasLoadedOnceRef = useRef(useLoadingStore.getState().isLoaded('dashboard_loaded'));
+const hasLoadedOnceRef = useRef(
+  useLoadingStore.getState().isLoaded('dashboard_loaded') || !!loadUserCache()
+);
 const [loading, setLoading] = useState(!hasLoadedOnceRef.current);
 
 const setLoadingOnce = useCallback((val: boolean) => {
@@ -368,14 +372,14 @@ const setLoadingOnce = useCallback((val: boolean) => {
 }, []);
 
 useEffect(() => {
-    if (hasLoadedOnceRef.current) return;
-    const parsed = loadUserCache();
-    if (parsed) {
-      setUserData(parsed);
-      setUserRole(parsed.role || "");
-      setLoadingOnce(false);
-    }
-  }, []);
+  if (hasLoadedOnceRef.current) return;
+  const parsed = loadUserCache();
+  if (parsed) {
+    setUserData(parsed as UserData);
+    setUserRole(parsed.role || "");
+  }
+  setLoadingOnce(false);
+}, []);
 const [activeTab, setActiveTab] = useState<TabType>(
   () => (useLoadingStore.getState().getActiveTab("student", "home") as TabType)
 );
@@ -451,9 +455,17 @@ const lastBgTime = useRef<number | null>(null);
   const [lfLoading, setLfLoading] = useState(false);
   const [lfOffline, setLfOffline] = useState(false);
   const [lfActiveTab, setLfActiveTab] = useState<LfActiveTab>("lostreports");
-  const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
+const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
+const [deleteReportModal, setDeleteReportModal] = useState<string | null>(null);
+  const [markFoundModal, setMarkFoundModal] = useState<string | null>(null);
+  const [callModal, setCallModal] = useState<{ phone: string; name: string } | null>(null);
+  const [toastState, setToastState] = useState<{ visible: boolean; message: string; type: "success" | "error" | "info" | "warning" }>({ visible: false, message: "", type: "info" });
 
-const fetchComplaints = useCallback(async (uid: string, silent = false) => {
+const showToast = useCallback((message: string, type: "success" | "error" | "info" | "warning" = "info") => {
+    setToastState({ visible: true, message, type });
+  }, []);
+
+  const fetchComplaints = useCallback(async (uid: string, silent = false) => {
     if (!silent) setComplaintsLoading(true);
     try {
       await syncStudentComplaints(uid);
@@ -543,12 +555,15 @@ await Promise.all([
     }
   }, []);
 
-  const fetchProfile = useCallback(async () => {
+const fetchProfile = useCallback(async () => {
     try {
       const data = await authAPI.myProfile();
       setHasPendingIdCard(data.hasPendingIdCardRequest || false);
+      if (data?.profile) {
+        setUserData(data.profile as any);
+        saveUserCache(data.profile);
+      }
     } catch {
-      // Error handled silently
     }
   }, []);
 
@@ -690,16 +705,9 @@ const onRefresh = useCallback(async () => {
     }
   }, [fetchComplaints, fetchLostFound, activeTab]);
 
-  const handleCall = useCallback((phone: string | null, name: string | null) => {
+const handleCall = useCallback((phone: string | null, name: string | null) => {
     if (!phone?.trim()) return;
-    Alert.alert(
-      `Call ${name || "Staff"}`,
-      `Do you want to call ${name || "the assigned staff"} at ${phone}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Call", onPress: () => Linking.openURL(`tel:${phone}`) },
-      ],
-    );
+    setCallModal({ phone, name: name || "Staff" });
   }, []);
 
 const handleLogout = useCallback(async () => {
@@ -719,73 +727,56 @@ await clearAuthTokens();
     mmkvDelete("lf_feed_hash");
     mmkvDelete("lf_claims_hash");
     mmkvDelete("lr_feed_hash");
-    mmkvDelete("lf_feed_synced_at");
+mmkvDelete("lf_feed_synced_at");
     mmkvDelete("lf_claims_synced_at");
     mmkvDelete("lr_feed_synced_at");
     mmkvDelete("lf_myposts_synced_at");
+    useLoadingStore.getState().clearPersistedState();
+  useLoadingStore.getState().clearPersistedState();
     const { resetDb } = await import("../../db/database");
     await resetDb();
     router.replace("/login" as any);
   }, [router]);
 
- const handleDeleteLostReport = useCallback(async (reportId: string) => {
-    Alert.alert(
-      "Delete Lost Report",
-      "Are you sure you want to delete this report?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            setDeletingReportId(reportId);
-            try {
-             await lostReportsAPI.deleteReport(reportId);
-              await deleteLostReportById(reportId);
-              // Optimistic update
-              setLostReports((prev) => prev.filter((r) => r.id !== reportId));
-              setUserLostReports((prev) => prev.filter((r) => r.id !== reportId));
-              // Force re-sync so hash refreshes
-              forceRefreshLostReports();
-            } catch (err: any) {
-              Alert.alert(
-                "Error",
-                "Failed to delete report. Please try again.",
-              );
-            } finally {
-              setDeletingReportId(null);
-            }
-          },
-        },
-      ],
-    );
-  }, [forceRefreshLostReports]);
+const handleDeleteLostReport = useCallback((reportId: string) => {
+    setDeleteReportModal(reportId);
+  }, []);
 
-const handleMarkFound = useCallback(async (id: string) => {
-    Alert.alert("Mark as Found", "Did you find your item?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Yes, Found it!",
-        style: "default",
-        onPress: async () => {
-          try {
-            await lostReportsAPI.markFound(id);
-            // Optimistic update
-            setLostReports((prev) =>
-              prev.map((r) => (r.id === id ? { ...r, status: "found" } : r)),
-            );
-            setUserLostReports((prev) =>
-              prev.map((r) => (r.id === id ? { ...r, status: "found" } : r)),
-            );
-            // Force re-sync so SQLite reflects server state
-            forceRefreshLostReports();
-          } catch (err: any) {
-            Alert.alert("Error", err.message || "Failed to mark as found.");
-          }
-        },
-      },
-    ]);
-  }, [forceRefreshLostReports]);
+  const executeDeleteLostReport = useCallback(async () => {
+    if (!deleteReportModal) return;
+    const reportId = deleteReportModal;
+    setDeleteReportModal(null);
+    setDeletingReportId(reportId);
+    try {
+      await lostReportsAPI.deleteReport(reportId);
+      await deleteLostReportById(reportId);
+      setLostReports((prev) => prev.filter((r) => r.id !== reportId));
+      setUserLostReports((prev) => prev.filter((r) => r.id !== reportId));
+      forceRefreshLostReports();
+    } catch {
+      showToast("Failed to delete report. Please try again.", "error");
+    } finally {
+      setDeletingReportId(null);
+    }
+  }, [deleteReportModal, forceRefreshLostReports, showToast]);
+
+  const handleMarkFound = useCallback((id: string) => {
+    setMarkFoundModal(id);
+  }, []);
+
+  const executeMarkFound = useCallback(async () => {
+    if (!markFoundModal) return;
+    const id = markFoundModal;
+    setMarkFoundModal(null);
+    try {
+      await lostReportsAPI.markFound(id);
+      setLostReports((prev) => prev.map((r) => (r.id === id ? { ...r, status: "found" } : r)));
+      setUserLostReports((prev) => prev.map((r) => (r.id === id ? { ...r, status: "found" } : r)));
+      forceRefreshLostReports();
+    } catch (err: any) {
+      showToast(err.message || "Failed to mark as found.", "error");
+    }
+  }, [markFoundModal, forceRefreshLostReports, showToast]);
 
   const bottomNavHeight = useMemo(() => 60 + insets.bottom, [insets.bottom]);
 const firstName = useMemo(() => {
@@ -828,13 +819,7 @@ const firstName = useMemo(() => {
     },
   ], []);
 
-useEffect(() => {
-  if (userRole === "admin") {
-    router.replace("/admin-dashboard" as any);
-  } else if (userRole === "staff") {
-    router.replace("/staff-dashboard" as any);
-  }
-}, [userRole]);
+
   
 
 
@@ -844,20 +829,53 @@ return (
       loading={loading}
       skeleton="dashboard"
     >
-      <View style={s.root}>
+  <View style={s.root}>
         <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-        {activeTab !== "report" && activeTab !== "lostfound" && (
-          <View style={s.topBar}>
-            <Text style={s.topBarTitle}>UniFiX</Text>
-          </View>
-        )}
+        <Toast
+          visible={toastState.visible}
+          message={toastState.message}
+          type={toastState.type}
+          onHide={() => setToastState((prev) => ({ ...prev, visible: false }))}
+        />
+  <CallConfirmationModal
+          visible={!!callModal}
+          name={callModal?.name}
+          phone={callModal?.phone ?? ""}
+          onCancel={() => setCallModal(null)}
+          onConfirm={() => {
+            if (callModal) Linking.openURL(`tel:${callModal.phone}`)
+            setCallModal(null)
+          }}
+        />
+        <ConfirmModal
+          visible={!!deleteReportModal}
+          variant="confirm"
+          destructive
+          title="Delete Lost Report"
+          message="Are you sure you want to delete this report?"
+          confirmText="Delete"
+          cancelText="Cancel"
+          onCancel={() => setDeleteReportModal(null)}
+          onConfirm={executeDeleteLostReport}
+        />
+        <ConfirmModal
+          visible={!!markFoundModal}
+          variant="confirm"
+          title="Mark as Found"
+          message="Did you find your item?"
+          confirmText="Yes, Found it!"
+          cancelText="Cancel"
+          onCancel={() => setMarkFoundModal(null)}
+          onConfirm={executeMarkFound}
+        />
+  
 
         {activeTab === "home" && (
           <ScrollView
             style={s.scroll}
-            contentContainerStyle={[
+       contentContainerStyle={[
               s.container,
-              { paddingBottom: bottomNavHeight + 20 },
+              { paddingTop: insets.top + 20, paddingBottom: bottomNavHeight + 20 },
             ]}
             showsVerticalScrollIndicator={false}
             refreshControl={
@@ -947,7 +965,9 @@ return (
             onSetFilterTab={setFilterTab}
             onCall={handleCall}
             bottomNavHeight={bottomNavHeight}
-            onComplaintsRefreshed={(fresh) => setComplaints(fresh as any)}
+            topInset={insets.top}
+      onComplaintsRefreshed={(fresh) => setComplaints(fresh as any)}
+            onReportIssue={() => switchTab("report")}
           />
         </View>
 )}
@@ -1043,18 +1063,10 @@ onForceRefreshFeed={forceRefreshFeed}
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#f8fafc" },
-  topBar: {
-    paddingTop: 56,
-    paddingHorizontal: 20,
-    paddingBottom: 14,
-    backgroundColor: "#ffffff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-    alignItems: "center",
-  },
+
   topBarTitle: { fontSize: 18, fontWeight: "800", color: "#0f172a" },
   scroll: { flex: 1 },
-  container: { paddingHorizontal: 20, paddingTop: 20 },
+container: { paddingHorizontal: 20, paddingTop: 20 },
   greetingRow: { marginBottom: 24 },
   greeting: {
     fontSize: 26,

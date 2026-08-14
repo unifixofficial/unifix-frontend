@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons"
 import { useRouter } from "expo-router"
 import { useEffect, useState } from "react"
-import { ActivityIndicator, Alert, FlatList, RefreshControl, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native"
-import { getAccessToken } from "@/utils/secureAuth"
-
+import { ActivityIndicator, FlatList, RefreshControl, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native"
+import { getValidAccessToken } from "@/utils/secureAuth"
+import ConfirmModal from "@/components/ConfirmModal"
 async function getToken() {
-  const token = await getAccessToken()
+const token = await getValidAccessToken()
   if (!token) throw new Error("Not authenticated")
   return token
 }
@@ -21,8 +21,9 @@ export default function SecurityScreen() {
   const [issues, setIssues] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
- const [actionLoading, setActionLoading] = useState<string | null>(null)
+const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [resolveModal, setResolveModal] = useState<string | null>(null)
 
   async function fetchIssues(silent = false) {
     try {
@@ -37,23 +38,25 @@ export default function SecurityScreen() {
     finally { setLoading(false) }
   }
 
-  async function handleResolve(issueId: string) {
-    Alert.alert("Resolve Issue", "Mark this security issue as resolved?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Resolve", style: "default", onPress: async () => {
-        try {
-          setActionLoading(issueId)
-          const token = await getToken()
-          await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/admin/resolve-security-issue`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ issueId, resolution: "Resolved by admin." }),
-          })
-          await fetchIssues(true)
-        } catch {}
-        finally { setActionLoading(null) }
-      }},
-    ])
+function handleResolve(issueId: string) {
+    setResolveModal(issueId)
+  }
+
+  async function executeResolve() {
+    if (!resolveModal) return
+    const issueId = resolveModal
+    setResolveModal(null)
+    try {
+      setActionLoading(issueId)
+      const token = await getToken()
+      await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/admin/resolve-security-issue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ issueId, resolution: "Resolved by admin." }),
+      })
+      await fetchIssues(true)
+    } catch {}
+    finally { setActionLoading(null) }
   }
 
   useEffect(() => { fetchIssues() }, [])
@@ -161,6 +164,16 @@ export default function SecurityScreen() {
           }}
         />
       )}
+<ConfirmModal
+        visible={!!resolveModal}
+        variant="confirm"
+        title="Resolve Issue"
+        message="Mark this security issue as resolved?"
+        confirmText="Resolve"
+        cancelText="Cancel"
+        onCancel={() => setResolveModal(null)}
+        onConfirm={executeResolve}
+      />
     </View>
   )
 }

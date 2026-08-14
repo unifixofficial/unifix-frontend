@@ -1,4 +1,33 @@
-import { create } from 'zustand'
+import { mmkvGetJSON, mmkvSetJSON, mmkvDelete } from '@/utils/mmkv';
+import { create } from 'zustand';
+
+const LOADED_CACHE_KEY = 'unifix_loaded_map';
+const DATA_CACHE_KEY = 'unifix_data_cache';
+const ACTIVE_TAB_KEY = 'unifix_active_tabs';
+
+function readLoaded(): Record<string, boolean> {
+  return mmkvGetJSON<Record<string, boolean>>(LOADED_CACHE_KEY) ?? {};
+}
+
+function writeLoaded(map: Record<string, boolean>): void {
+  mmkvSetJSON(LOADED_CACHE_KEY, map);
+}
+
+function readDataCache(): Record<string, any> {
+  return mmkvGetJSON<Record<string, any>>(DATA_CACHE_KEY) ?? {};
+}
+
+function writeDataCache(cache: Record<string, any>): void {
+  mmkvSetJSON(DATA_CACHE_KEY, cache);
+}
+
+function readActiveTabs(): Record<string, string> {
+  return mmkvGetJSON<Record<string, string>>(ACTIVE_TAB_KEY) ?? {};
+}
+
+function writeActiveTabs(tabs: Record<string, string>): void {
+  mmkvSetJSON(ACTIVE_TAB_KEY, tabs);
+}
 
 type LoadingStore = {
   loadingMap: Record<string, boolean>
@@ -40,6 +69,7 @@ type LoadingStore = {
     adminProfile: any | null
   }
   setAdminData: (patch: Partial<LoadingStore['adminData']>) => void
+  clearPersistedState: () => void
 }
 
 export const useLoadingStore = create<LoadingStore>((set, get) => ({
@@ -48,19 +78,28 @@ export const useLoadingStore = create<LoadingStore>((set, get) => ({
     set((state) => ({ loadingMap: { ...state.loadingMap, [key]: value } })),
   isLoading: (key) => get().loadingMap[key] ?? false,
 
-  loaded: {},
-  markLoaded: (key) =>
-    set((state) => ({ loaded: { ...state.loaded, [key]: true } })),
+  loaded: readLoaded(),
+  markLoaded: (key) => {
+    const next = { ...get().loaded, [key]: true };
+    writeLoaded(next);
+    set({ loaded: next });
+  },
   isLoaded: (key) => get().loaded[key] === true,
 
-  dataCache: {},
-  setDataCache: (key, value) =>
-    set((state) => ({ dataCache: { ...state.dataCache, [key]: value } })),
+  dataCache: readDataCache(),
+  setDataCache: (key, value) => {
+    const next = { ...get().dataCache, [key]: value };
+    writeDataCache(next);
+    set({ dataCache: next });
+  },
   getDataCache: (key) => get().dataCache[key] ?? null,
 
-  activeTab: {},
-  setActiveTab: (screen, tab) =>
-    set((state) => ({ activeTab: { ...state.activeTab, [screen]: tab } })),
+  activeTab: readActiveTabs(),
+  setActiveTab: (screen, tab) => {
+    const next = { ...get().activeTab, [screen]: tab };
+    writeActiveTabs(next);
+    set({ activeTab: next });
+  },
   getActiveTab: (screen, defaultTab) =>
     get().activeTab[screen] ?? defaultTab,
 
@@ -96,4 +135,10 @@ export const useLoadingStore = create<LoadingStore>((set, get) => ({
   },
   setAdminData: (patch) =>
     set((state) => ({ adminData: { ...state.adminData, ...patch } })),
-}))
+
+  clearPersistedState: () => {
+    mmkvDelete(LOADED_CACHE_KEY);
+    mmkvDelete(DATA_CACHE_KEY);
+    set({ loaded: {}, dataCache: {} });
+  },
+}));

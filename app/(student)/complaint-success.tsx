@@ -24,7 +24,7 @@ export default function ComplaintSuccessScreen() {
         </View>
     <TouchableOpacity
           style={s.trackBtn}
-        onPress={() => router.replace("/?openTab=complaints&skeleton=complaint" as any)}
+    onPress={() => router.replace({ pathname: "/(student)/Home", params: { openTab: "complaints" } } as any)}
           activeOpacity={0.85}
         >
           <Ionicons

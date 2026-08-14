@@ -1,27 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import {
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 
 export default function TermsAndConditionsScreen() {
   const { type } = useLocalSearchParams<{ type: string }>();
+  const insets = useSafeAreaInsets();
   const canGoBack = router.canGoBack?.() ?? false;
 
-const url =
-  type === "privacy"
-    ? "https://unifixapp.vercel.app/privacy"
-    : type === "copyright"
-    ? "https://unifixapp.vercel.app/copyright"
-    : "https://unifixapp.vercel.app/terms";
+  const url =
+    type === "privacy"
+      ? "https://unifixapp.vercel.app/privacy"
+      : type === "copyright"
+      ? "https://unifixapp.vercel.app/copyright"
+      : "https://unifixapp.vercel.app/terms";
 
   const injectScript = `
-   
     const style = document.createElement('style');
     style.textContent = \`
       .tnc-navbar { display: none !important; }
@@ -34,17 +29,16 @@ const url =
 
   return (
     <View style={styles.root}>
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => (canGoBack ? router.back() : router.replace("/login"))}
+          onPress={() => (canGoBack ? router.back() : router.replace("/(auth)/login" as any))}
         >
           <Ionicons name="arrow-back" size={18} color="#0f172a" />
         </TouchableOpacity>
         <Text style={styles.topBarBrand}>UniFiX</Text>
         <View style={{ width: 36 }} />
       </View>
-
       <WebView
         source={{ uri: url }}
         style={styles.webview}
@@ -63,7 +57,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingTop: Platform.OS === "ios" ? 56 : 48,
     paddingHorizontal: 20,
     paddingBottom: 12,
     backgroundColor: "#ffffff",

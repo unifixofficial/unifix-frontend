@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
-import { getAccessToken } from '@/utils/secureAuth';
+import { getValidAccessToken } from '@/utils/secureAuth';
 import { useEffect, useState } from "react";
+import AttachmentPickerModal from "@/components/AttachmentPickerModal";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -122,7 +122,7 @@ const [submitting, setSubmitting] = useState(false);
   const [availabilityOpen, setAvailabilityOpen] = useState(true);
   const [availabilityMessage, setAvailabilityMessage] = useState("");
 useEffect(() => {
-    getAccessToken().then((token) => {
+    getValidAccessToken().then((token) => {
       if (!token) router.replace("/login" as any);
     });
   }, []);
@@ -170,64 +170,44 @@ const handleRoomInput = (val: string) => {
         setRoomError("Room not found. Try e.g. 319, 214, 003A.");
     }
   };
-  const pickPhoto = async () => {
-    Alert.alert("Add Photo", "Choose an option", [
-      {
-        text: "Take Photo",
-        onPress: async () => {
-          try {
-            const perm = await ImagePicker.requestCameraPermissionsAsync();
-            if (!perm.granted) {
-              Alert.alert("Permission Required", "Please allow camera access.");
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              allowsEditing: true,
-              quality: 0.8,
-            });
-            if (result.canceled) return;
-            const asset = result.assets[0];
-            setPhoto({
-              uri: asset.uri,
-              name: asset.uri.split("/").pop() || `complaint_${Date.now()}.jpg`,
-            });
-          } catch {
-            Alert.alert("Error", "Failed to open camera.");
-          }
-        },
-      },
-      {
-        text: "Choose from Gallery",
-        onPress: async () => {
-          try {
-            const perm =
-              await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (!perm.granted) {
-              Alert.alert(
-                "Permission Required",
-                "Please allow photo library access.",
-              );
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              quality: 0.8,
-            });
-            if (result.canceled) return;
-            const asset = result.assets[0];
-            setPhoto({
-              uri: asset.uri,
-              name: asset.uri.split("/").pop() || `complaint_${Date.now()}.jpg`,
-            });
-          } catch {
-            Alert.alert("Error", "Failed to pick photo.");
-          }
-        },
-      },
-      { text: "Cancel", style: "cancel" },
-    ]);
+const [pickerVisible, setPickerVisible] = useState(false);
+
+const handleGallery = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      setPhoto({
+        uri: asset.uri,
+        name: asset.uri.split("/").pop() || `complaint_${Date.now()}.jpg`,
+      });
+    } catch {}
   };
+
+  const handleCamera = async () => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) return;
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      setPhoto({
+        uri: asset.uri,
+        name: asset.uri.split("/").pop() || `complaint_${Date.now()}.jpg`,
+      });
+    } catch {}
+  };
+
+  const pickPhoto = () => setPickerVisible(true);
 
 const handleSubmit = async () => {
     setError("");
@@ -240,7 +220,7 @@ const handleSubmit = async () => {
 
     setSubmitting(true);
     try {
-  const freshToken = await getAccessToken();
+const freshToken = await getValidAccessToken();
       if (!freshToken) {
         setError("Authentication error. Please login again.");
         return;
@@ -344,11 +324,7 @@ const selectedCategoryObj = masterData?.categories.find(
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={{color:'red', fontSize:10}}>
-  Buildings: {masterData?.buildings?.length ?? 'null'} | 
-  Loading: {masterLoading ? 'yes' : 'no'} |
-  Rooms: {masterData?.buildings?.[0]?.rooms?.length ?? 'null'}
-</Text>
+
           <Text style={s.sectionLabel}>SELECT CATEGORY</Text>
 <ScrollView
             horizontal
@@ -559,15 +535,20 @@ const selectedCategoryObj = masterData?.categories.find(
             )}
           </TouchableOpacity>
 
-          <Text style={s.disclaimer}>
+<Text style={s.disclaimer}>
             By submitting, you agree to our maintenance guidelines.
           </Text>
         </ScrollView>
       </View>
+      <AttachmentPickerModal
+        visible={pickerVisible}
+        onClose={() => setPickerVisible(false)}
+        onGallery={handleGallery}
+        onCamera={handleCamera}
+      />
     </KeyboardAvoidingView>
   );
 }
-
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#ffffff" },
   heroSection: {

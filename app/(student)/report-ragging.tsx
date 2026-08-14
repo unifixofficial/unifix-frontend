@@ -1,10 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { getAccessToken } from '@/utils/secureAuth';
+import { getValidAccessToken } from '@/utils/secureAuth';
 import { useEffect, useState } from "react";
+import ConfirmModal from "@/components/ConfirmModal";
+import Toast from "@/components/Toast";
+import { useToast } from "@/hooks/useToast";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView, Platform,
   ScrollView,
   StatusBar,
@@ -42,12 +44,15 @@ const [roomError, setRoomError] = useState("");
   const [description, setDescription] = useState("");
   const [bullyDescription, setBullyDescription] = useState("");
   const [isAnonymous, setIsAnonymous] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+ const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [submitModal, setSubmitModal] = useState(false);
+  const [submitModalMessage, setSubmitModalMessage] = useState("");
+  const { toast, toastProps } = useToast();
   const router = useRouter();
 
 useEffect(() => {
-    getAccessToken().then((token) => {
+    getValidAccessToken().then((token) => {
       if (!token) router.replace("/login" as any);
     });
   }, []);
@@ -70,54 +75,57 @@ const handleRoomInput = (val: string) => {
   };
 const locationText = roomInput.trim();
 
-  const handleSubmit = async () => {
+const handleSubmit = () => {
     setError("");
     if (!incidentDate.trim()) return setError("Please enter the date of the incident.");
     if (!isValidDate(incidentDate)) return setError("Please enter a valid date.");
     if (!roomInput.trim()) return setError("Please enter the location.");
     if (!description.trim()) return setError("Please describe what happened.");
     if (description.trim().length < 30) return setError("Please describe in at least 30 characters.");
-
-    Alert.alert(
-      "Submit Report",
+    setSubmitModalMessage(
       isAnonymous
         ? "Your report will be submitted anonymously. HOD will be notified without your identity."
-        : "Your name and details will be shared with HOD. Do you want to proceed?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Submit", style: "default",
-          onPress: async () => {
-            setSubmitting(true);
-            try {
-              await authAPI.reportRagging({
-                incidentDate: incidentDate.trim(),
-                incidentTime: incidentTime.trim(),
-                location: locationText,
-                description: description.trim(),
-                bullyDescription: bullyDescription.trim(),
-                isAnonymous,
-              });
-              Alert.alert(
-                "Report Submitted ✓",
-                "Your ragging report has been submitted. The HOD has been notified and will take appropriate action.",
-                [{ text: "OK", onPress: () => router.back() }]
-              );
-            } catch (err: any) {
-              setError(err.message || "Failed to submit. Please try again.");
-            } finally {
-              setSubmitting(false);
-            }
-          },
-        },
-      ]
+        : "Your name and details will be shared with HOD. Do you want to proceed?"
     );
+    setSubmitModal(true);
+  };
+
+  const executeSubmit = async () => {
+    setSubmitModal(false);
+    setSubmitting(true);
+    try {
+      await authAPI.reportRagging({
+        incidentDate: incidentDate.trim(),
+        incidentTime: incidentTime.trim(),
+        location: locationText,
+        description: description.trim(),
+        bullyDescription: bullyDescription.trim(),
+        isAnonymous,
+      });
+      toast("Your ragging report has been submitted. The HOD has been notified and will take appropriate action.", "success");
+      setTimeout(() => router.back(), 3000);
+    } catch (err: any) {
+      setError(err.message || "Failed to submit. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+  <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       <View style={s.root}>
+        <Toast {...toastProps} />
+        <ConfirmModal
+          visible={submitModal}
+          variant="confirm"
+          title="Submit Report"
+          message={submitModalMessage}
+          confirmText="Submit"
+          cancelText="Cancel"
+          onCancel={() => setSubmitModal(false)}
+          onConfirm={executeSubmit}
+        />
         <View style={s.header}>
           <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
             <Ionicons name="arrow-back" size={18} color="#0f172a" />

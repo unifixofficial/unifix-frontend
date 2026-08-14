@@ -2,9 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { memo, useCallback, useMemo, useState } from "react";
+import AttachmentPickerModal from "@/components/AttachmentPickerModal";
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getAccessToken } from '@/utils/secureAuth';
+import { getValidAccessToken } from '@/utils/secureAuth';
 import { useMasterData, resolveRoom as resolveRoomFromMaster } from "../../../hooks/useMasterData";
 const CLOUDINARY_CLOUD = "dcizaxjul";
 const CLOUDINARY_PRESET = "unifix_upload";
@@ -88,63 +88,45 @@ const { data: masterData, loading: masterLoading, error: masterError } = useMast
     }
   }, [masterData]);
 
-  const handleReportPickPhoto = useCallback(async () => {
-    Alert.alert("Add Photo", "Choose an option", [
-      {
-        text: "Take Photo",
-        onPress: async () => {
-          try {
-            const perm = await ImagePicker.requestCameraPermissionsAsync();
-            if (!perm.granted) {
-              Alert.alert("Permission Required", "Please allow camera access.");
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              allowsEditing: true,
-              quality: 0.8,
-            });
-            if (result.canceled) return;
-            const asset = result.assets[0];
-            setReportPhoto({
-              uri: asset.uri,
-              name: asset.uri.split("/").pop() || `complaint_${Date.now()}.jpg`,
-            });
-          } catch {
-            Alert.alert("Error", "Failed to open camera.");
-          }
-        },
-      },
-      {
-        text: "Choose from Gallery",
-        onPress: async () => {
-          try {
-            const perm =
-              await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (!perm.granted) {
-              Alert.alert(
-                "Permission Required",
-                "Please allow photo library access.",
-              );
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              quality: 0.8,
-            });
-            if (result.canceled) return;
-            const asset = result.assets[0];
-            setReportPhoto({
-              uri: asset.uri,
-              name: asset.uri.split("/").pop() || `complaint_${Date.now()}.jpg`,
-            });
-          } catch {
-            Alert.alert("Error", "Failed to pick photo.");
-          }
-        },
-      },
-      { text: "Cancel", style: "cancel" },
-    ]);
+const [reportPickerVisible, setReportPickerVisible] = useState(false);
+
+  const handleReportPickPhoto = useCallback(() => {
+    setReportPickerVisible(true);
+  }, []);
+
+  const handleReportGallery = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      setReportPhoto({
+        uri: asset.uri,
+        name: asset.uri.split("/").pop() || `complaint_${Date.now()}.jpg`,
+      });
+    } catch {}
+  }, []);
+
+  const handleReportCamera = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) return;
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      setReportPhoto({
+        uri: asset.uri,
+        name: asset.uri.split("/").pop() || `complaint_${Date.now()}.jpg`,
+      });
+    } catch {}
   }, []);
 
   const handleReportSubmit = useCallback(async () => {
@@ -158,7 +140,7 @@ const { data: masterData, loading: masterLoading, error: masterError } = useMast
       return setReportError("Please enter a valid room number.");
     setReportSubmitting(true);
     try {
-  const freshToken = await getAccessToken();
+const freshToken = await getValidAccessToken();
       if (!freshToken) {
         setReportError("Authentication error. Please login again.");
         return;
@@ -478,10 +460,16 @@ const { data: masterData, loading: masterLoading, error: masterError } = useMast
             </View>
           )}
         </TouchableOpacity>
-        <Text style={styles.footerText}>
+<Text style={styles.footerText}>
           By submitting, you agree to our maintenance guidelines.
         </Text>
       </ScrollView>
+      <AttachmentPickerModal
+        visible={reportPickerVisible}
+        onClose={() => setReportPickerVisible(false)}
+        onGallery={handleReportGallery}
+        onCamera={handleReportCamera}
+      />
     </View>
   );
 });

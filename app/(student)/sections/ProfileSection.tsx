@@ -1,14 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import { getAccessToken } from '@/utils/secureAuth';
+import { getValidAccessToken } from '@/utils/secureAuth';
 import React, { memo, useCallback, useMemo, useState } from "react";
+import ConfirmModal from "@/components/ConfirmModal";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -137,10 +136,24 @@ export default memo(function ProfileSection({
   const [securityError, setSecurityError] = useState("");
   const [securitySuccess, setSecuritySuccess] = useState("");
 
-  // ID Card state
-  const [idCardUploading, setIdCardUploading] = useState(false);
+const [idCardUploading, setIdCardUploading] = useState(false);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [idCardError, setIdCardError] = useState("");
   const [idCardSuccess, setIdCardSuccess] = useState("");
+  const [profileAlertVisible, setProfileAlertVisible] = useState(false);
+  const [profileAlertConfig, setProfileAlertConfig] = useState<{
+    variant: "success" | "error" | "confirm";
+    title: string;
+    message: string;
+    destructive?: boolean;
+    confirmText?: string;
+    onConfirm?: () => void;
+  }>({ variant: "info" as any, title: "", message: "" });
+
+  const showAlert = (config: typeof profileAlertConfig) => {
+    setProfileAlertConfig(config);
+    setProfileAlertVisible(true);
+  };
 
   const bottomNavHeight = 60 + insets.bottom;
   const firstName = useMemo(() => userData?.fullName?.split(" ")[0] ?? "User", [userData?.fullName]);
@@ -169,8 +182,8 @@ export default memo(function ProfileSection({
         result.assets[0].uri,
         "unifix/profiles",
       );
-const token = await getAccessToken();
-      await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/complete-profile`, {
+const token = await getValidAccessToken();
+      await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/complete-profile`,{
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ photoUrl: url }),
@@ -242,56 +255,59 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
     }
   }, [currentPassword, newPassword, confirmPassword]);
 
-  const handleLogoutAllDevices = useCallback(async () => {
-    Alert.alert(
-      "Logout All Devices",
-      "This will end all active sessions on all devices.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Confirm",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await authAPI.logoutAllDevices();
-              await onLogout();
-            } catch {}
-          },
-        },
-      ],
-    );
+const handleLogoutAllDevices = useCallback(() => {
+    showAlert({
+      variant: "confirm",
+      title: "Logout All Devices",
+      message: "This will end all active sessions on all devices.",
+      confirmText: "Confirm",
+      destructive: true,
+      onConfirm: async () => {
+        setProfileAlertVisible(false);
+        try {
+          await authAPI.logoutAllDevices();
+          await onLogout();
+        } catch {}
+      },
+    });
   }, [onLogout]);
 
-  const handleDeleteAccount = useCallback(async () => {
+const handleDeleteAccount = useCallback(() => {
     const isStaff = userData?.role === "staff";
-    Alert.alert(
-      "Delete Account",
-      isStaff
+    showAlert({
+      variant: "confirm",
+      title: "Delete Account",
+      message: isStaff
         ? "Your deletion request will be sent to admin for approval."
         : "This will permanently delete your account. This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: isStaff ? "Submit Request" : "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const data = await authAPI.deleteAccount();
-              if (data.requiresApproval) {
-                Alert.alert(
-                  "Request Submitted",
-                  "Your account deletion request has been submitted and is currently under review.",
-                );
-              } else {
-                await onLogout();
-              }
-            } catch (err: any) {
-              Alert.alert("Error", err.message || "Failed to process request.");
-            }
-          },
-        },
-      ],
-    );
+      confirmText: isStaff ? "Submit Request" : "Delete",
+      destructive: true,
+      onConfirm: async () => {
+        setProfileAlertVisible(false);
+        try {
+          const data = await authAPI.deleteAccount();
+          if (data.requiresApproval) {
+            showAlert({
+              variant: "success",
+              title: "Request Submitted",
+              message: "Your account deletion request has been submitted and is currently under review.",
+              confirmText: "OK",
+              onConfirm: () => setProfileAlertVisible(false),
+            });
+          } else {
+            await onLogout();
+          }
+        } catch (err: any) {
+          showAlert({
+            variant: "error",
+            title: "Error",
+            message: err.message || "Failed to process request.",
+            confirmText: "OK",
+            onConfirm: () => setProfileAlertVisible(false),
+          });
+        }
+      },
+    });
   }, [userData?.role, onLogout]);
    const handleSubmitSecurityIssue = useCallback(async () => {
     setSecurityError("");
@@ -366,12 +382,12 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
       ))}
     </View>
   ), []);
-  const renderProfileMain = () => (
+const renderProfileMain = () => (
     <ScrollView
       style={s.scroll}
       contentContainerStyle={[
         s.container,
-        { paddingBottom: bottomNavHeight + 20 },
+        { paddingTop: insets.top + 20, paddingBottom: bottomNavHeight + 20 },
       ]}
       showsVerticalScrollIndicator={false}
     >
@@ -495,18 +511,9 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
         <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
       </TouchableOpacity>
 
- <TouchableOpacity
+<TouchableOpacity
         style={s.logoutBtn}
-        onPress={() => {
-          Alert.alert(
-            "Log Out",
-            "Are you sure you want to log out?",
-            [
-              { text: "No", style: "cancel" },
-              { text: "Yes", style: "destructive", onPress: onLogout },
-            ]
-          );
-        }}
+        onPress={() => setLogoutModalVisible(true)}
         activeOpacity={0.85}
       >
         <Ionicons
@@ -521,10 +528,10 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
     </ScrollView>
   );
 
-  const renderPersonalInfo = () => (
+const renderPersonalInfo = () => (
     <ScrollView
       style={s.scroll}
-      contentContainerStyle={[s.container, { paddingBottom: 40 }]}
+      contentContainerStyle={[s.container, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
       showsVerticalScrollIndicator={false}
     >
       <View style={s.subPageHeader}>
@@ -761,9 +768,9 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <ScrollView
+<ScrollView
         style={s.scroll}
-        contentContainerStyle={[s.container, { paddingBottom: 40 }]}
+        contentContainerStyle={[s.container, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={s.subPageHeader}>
@@ -900,9 +907,9 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <ScrollView
+<ScrollView
         style={s.scroll}
-        contentContainerStyle={[s.container, { paddingBottom: 40 }]}
+        contentContainerStyle={[s.container, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={s.subPageHeader}>
@@ -982,11 +989,10 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
       </ScrollView>
     </KeyboardAvoidingView>
   );
-
 const renderSettings = () => (
     <ScrollView
       style={s.scroll}
-      contentContainerStyle={[s.container, { paddingBottom: 40 }]}
+      contentContainerStyle={[s.container, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
       showsVerticalScrollIndicator={false}
     >
       <View style={s.subPageHeader}>
@@ -1064,10 +1070,10 @@ const renderSettings = () => (
     </ScrollView>
   );
 
-  const renderLegal = () => (
+const renderLegal = () => (
     <ScrollView
       style={s.scroll}
-      contentContainerStyle={[s.container, { paddingBottom: 40 }]}
+      contentContainerStyle={[s.container, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
       showsVerticalScrollIndicator={false}
     >
       <View style={s.subPageHeader}>
@@ -1077,17 +1083,16 @@ const renderSettings = () => (
         <Text style={s.subPageTitle}>Legal</Text>
       </View>
 
- {[
-        { label: "Terms & Conditions", icon: "document-text-outline", url: "https://unifixapp.vercel.app/terms" },
-        { label: "Privacy Policy", icon: "shield-checkmark-outline", url: "https://unifixapp.vercel.app/privacy" },
-        { label: "Copyright", icon: "copyright-outline", url: "https://unifixapp.vercel.app/copyright" },
-       
+{[
+        { label: "Terms & Conditions", icon: "document-text-outline", type: "terms" },
+        { label: "Privacy Policy", icon: "shield-checkmark-outline", type: "privacy" },
+    { label: "Copyright", icon: "ribbon-outline", type: "copyright" },
       ].map((item, index) => (
         <TouchableOpacity
           key={index}
           style={s.menuCard}
           activeOpacity={0.85}
-          onPress={() => { if (item.url) Linking.openURL(item.url); }}
+          onPress={() => router.push({ pathname: "/legal/terms-and-conditions", params: { type: item.type } } as any)}
         >
           <View style={s.menuCardLeft}>
             <View style={[s.menuIconWrap, { backgroundColor: "#f0f9ff" }]}>
@@ -1103,8 +1108,30 @@ const renderSettings = () => (
     </ScrollView>
   );
 
-  return (
+return (
     <>
+      <ConfirmModal
+        visible={profileAlertVisible}
+        variant={profileAlertConfig.variant}
+        title={profileAlertConfig.title}
+        message={profileAlertConfig.message}
+        confirmText={profileAlertConfig.confirmText ?? "OK"}
+        cancelText="Cancel"
+        destructive={profileAlertConfig.destructive}
+        onConfirm={profileAlertConfig.onConfirm ?? (() => setProfileAlertVisible(false))}
+        onCancel={profileAlertConfig.variant === "confirm" ? () => setProfileAlertVisible(false) : undefined}
+      />
+ <ConfirmModal
+        visible={logoutModalVisible}
+        title="Log Out"
+        message="Are you sure you want to log out?"
+        confirmText="Log Out"
+        cancelText="Cancel"
+        destructive
+        showIcon={false}
+        onCancel={() => setLogoutModalVisible(false)}
+        onConfirm={() => { setLogoutModalVisible(false); onLogout(); }}
+      />
       {profileScreen === "main" && renderProfileMain()}
       {profileScreen === "personalInfo" && renderPersonalInfo()}
       {profileScreen === "changePassword" && renderChangePassword()}
@@ -1117,7 +1144,7 @@ const renderSettings = () => (
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
-  container: { paddingHorizontal: 20, paddingTop: 20 },
+container: { paddingHorizontal: 20 },
   profileHero: { alignItems: "center", paddingTop: 20, paddingBottom: 28 },
   profileAvatarBtn: { position: "relative", marginBottom: 14 },
   profileAvatar: {

@@ -1,15 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
-import { getAccessToken, clearAuthTokens } from '@/utils/secureAuth';
+import ConfirmModal from "@/components/ConfirmModal";
+import Toast from "@/components/Toast";
+import { useToast } from "@/hooks/useToast";
+import { getValidAccessToken, clearAuthTokens } from '@/utils/secureAuth';
 import { clearUserCache } from '@/utils/cache';
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 
 import React, { memo, useCallback, useMemo, useState } from "react";
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
-  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -19,6 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface ProfileScreenProps {
   adminData: any;
@@ -27,15 +29,18 @@ interface ProfileScreenProps {
 
 export default memo(function AdminProfileScreen({ adminData, allComplaints }: ProfileScreenProps) {
   const router = useRouter();
-  const [pwModalVisible, setPwModalVisible] = useState(false);
+  const insets = useSafeAreaInsets();
+const [pwModalVisible, setPwModalVisible] = useState(false);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
  const [confirmPassword, setConfirmPassword] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
   const [pwError, setPwError] = useState("");
-  const [pwSuccess, setPwSuccess] = useState("");
+ const [pwSuccess, setPwSuccess] = useState("");
   const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
+const { toast, toastProps } = useToast();
  
 const [profileScreen, setProfileScreen] = useState<"main" | "legal" | "settings" | "changePassword">("main");
 
@@ -44,28 +49,21 @@ const [profileScreen, setProfileScreen] = useState<"main" | "legal" | "settings"
   const efficiency = useMemo(() => totalCount > 0 ? Math.round((resolvedCount / totalCount) * 100) : 0, [resolvedCount, totalCount]);
   const flaggedCount = useMemo(() => allComplaints.filter((c) => c.flagged && !c.flagResolved).length, [allComplaints]);
 
-  const handleLogout = useCallback(() => {
-    Alert.alert("Log Out", "Are you sure you want to log out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log Out",
-        style: "destructive",
-onPress: async () => {
-        try {
-          const token = await getAccessToken();
-          if (token) {
-            await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/logout-all-devices`, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${token}` },
-            });
-          }
-        } catch {}
-        await clearAuthTokens();
-        clearUserCache();
-        router.replace("/login" as any);
-      },
-      },
-    ]);
+const handleLogout = useCallback(async () => {
+    try {
+     const token = await getValidAccessToken();
+      if (token) {
+        await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/logout-all-devices`,{
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+    } catch {}
+    await clearAuthTokens();
+    clearUserCache();
+    const { useLoadingStore } = require('@/store/loadingStore');
+    useLoadingStore.getState().clearPersistedState();
+    router.replace("/(auth)/login" as any);
   }, [router]);
 
   const handlePickPhoto = useCallback(async () => {
@@ -89,15 +87,15 @@ onPress: async () => {
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
       const url = data.secure_url;
-const token = await getAccessToken();
-      await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/update-profile`, {
+const token = await getValidAccessToken();
+      await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/update-profile`,{
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ photoUrl: url }),
       });
-      Alert.alert("Success", "Profile photo updated!");
+toast("Profile photo updated!", "success");
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Failed to upload photo.");
+      toast(e.message || "Failed to upload photo.", "error");
     }
   }, []);
 
@@ -108,7 +106,7 @@ const MENU_ITEMS = useMemo(() => [
 
 const renderLegal = () => (
     <View style={styles.root}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => setProfileScreen("main")} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Ionicons name="arrow-back" size={20} color="#1a3c2e" />
           <Text style={styles.headerTitle}>Legal</Text>
@@ -117,17 +115,16 @@ const renderLegal = () => (
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100, paddingTop: 8 }}>
         <View style={styles.menuSection}>
       {[
-            { label: "Terms & Conditions", icon: "document-text-outline", url: "https://unifixapp.vercel.app/terms" },
-            { label: "Privacy Policy", icon: "shield-checkmark-outline", url: "https://unifixapp.vercel.app/privacy" },
-            { label: "About UNIFIX", icon: "information-circle-outline", url: "https://unifixapp.vercel.app/about" },
-            { label: "Copyright", icon: "document-text-outline", url: "https://unifixapp.vercel.app/copyright" },
+           { label: "Terms & Conditions", icon: "document-text-outline", type: "terms" },
+        { label: "Privacy Policy", icon: "shield-checkmark-outline", type: "privacy" },
+     { label: "Copyright", icon: "ribbon-outline", type: "copyright" },
 
           ].map((item, index) => (
             <TouchableOpacity
               key={index}
               style={styles.menuRow}
               activeOpacity={0.7}
-              onPress={() => Linking.openURL(item.url)}
+            onPress={() => router.push({ pathname: "/legal/terms-and-conditions", params: { type: item.type } } as any)}
             >
               <View style={[styles.menuIcon, { backgroundColor: "#0ea5e918" }]}>
                 <Ionicons name={item.icon as any} size={18} color="#0ea5e9" />
@@ -143,7 +140,7 @@ const renderLegal = () => (
 
 const renderSettings = () => (
     <View style={styles.root}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => setProfileScreen("main")} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Ionicons name="arrow-back" size={20} color="#1a3c2e" />
           <Text style={styles.headerTitle}>Settings</Text>
@@ -169,9 +166,9 @@ const renderSettings = () => (
 
 if (profileScreen === "legal") return renderLegal();
   if (profileScreen === "settings") return renderSettings();
-  if (profileScreen === "changePassword") return (
+if (profileScreen === "changePassword") return (
     <View style={styles.root}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => setProfileScreen("settings")} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Ionicons name="arrow-back" size={20} color="#1a3c2e" />
           <Text style={styles.headerTitle}>Change Password</Text>
@@ -186,10 +183,21 @@ if (profileScreen === "legal") return renderLegal();
       </ScrollView>
     </View>
   );
-
-  return (
-    <View style={styles.root}>
-      <View style={styles.header}>
+return (
+<View style={styles.root}>
+      <Toast {...toastProps} />
+<ConfirmModal
+        visible={logoutModalVisible}
+        title="Log Out"
+        message="Are you sure you want to log out?"
+        confirmText="Log Out"
+        cancelText="Cancel"
+        destructive
+        showIcon={false}
+        onCancel={() => setLogoutModalVisible(false)}
+        onConfirm={() => { setLogoutModalVisible(false); handleLogout(); }}
+      />
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Text style={styles.headerTitle}>Profile</Text>
       </View>
 
@@ -243,7 +251,7 @@ if (profileScreen === "legal") return renderLegal();
           ))}
         </View>
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
+    <TouchableOpacity style={styles.logoutBtn} onPress={() => setLogoutModalVisible(true)} activeOpacity={0.85}>
           <Ionicons name="log-out-outline" size={18} color="#dc2626" />
           <Text style={styles.logoutBtnText}>Log Out</Text>
         </TouchableOpacity>
@@ -278,7 +286,7 @@ if (profileScreen === "legal") return renderLegal();
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#f0fdf4" },
-  header: { paddingTop: 52, paddingHorizontal: 20, paddingBottom: 16, backgroundColor: "#f0fdf4" },
+header: { paddingHorizontal: 20, paddingBottom: 16, backgroundColor: "#f0fdf4" },
   headerTitle: { fontSize: 26, fontWeight: "800", color: "#1a3c2e" },
   scroll: { flex: 1 },
   profileCard: {

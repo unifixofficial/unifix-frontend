@@ -4,9 +4,9 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
+import AttachmentPickerModal from "@/components/AttachmentPickerModal";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Dimensions,
   Image,
@@ -212,7 +212,8 @@ export default memo(function StaffFoundScreen({ initialTab }: { initialTab?: "fe
   const [handedToName, setHandedToName] = useState("");
   const [handoverLoading, setHandoverLoading] = useState(false);
 const [handoverError, setHandoverError] = useState("");
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [staffPickerVisible, setStaffPickerVisible] = useState(false);
 
 const { data: masterData } = useMasterData();
   const LF_CATEGORIES_FOUND = getLFCategories(masterData?.lfCategories ?? [], 'found');
@@ -230,46 +231,34 @@ const handlePostFoundRoomInput = useCallback((val: string) => {
     else { setPostFoundResolvedRoom(null); if (val.trim().length >= 3) setPostFoundRoomError("Invalid room number."); }
   }, [masterData]);
 
-const handlePostFoundPickPhoto = useCallback(async () => {
-    Alert.alert("Add Photo", "Choose an option", [
-      {
-        text: "Take Photo",
-        onPress: async () => {
-          try {
-            const perm = await ImagePicker.requestCameraPermissionsAsync();
-            if (!perm.granted) {
-              Alert.alert("Permission Required", "Please allow camera access.");
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8 });
-            if (result.canceled) return;
-            const asset = result.assets[0];
-            setPostFoundPhoto({ uri: asset.uri, name: asset.uri.split("/").pop() || `lostfound_${Date.now()}.jpg` });
-          } catch {
-            Alert.alert("Error", "Failed to open camera.");
-          }
-        },
-      },
-      {
-        text: "Choose from Gallery",
-        onPress: async () => {
-          try {
-            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (!perm.granted) {
-              Alert.alert("Permission Required", "Please allow photo library access.");
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.8 });
-            if (result.canceled) return;
-            const asset = result.assets[0];
-            setPostFoundPhoto({ uri: asset.uri, name: asset.uri.split("/").pop() || `lostfound_${Date.now()}.jpg` });
-          } catch {
-            Alert.alert("Error", "Failed to pick photo.");
-          }
-        },
-      },
-      { text: "Cancel", style: "cancel" },
-    ]);
+const handlePostFoundPickPhoto = useCallback(() => {
+    setStaffPickerVisible(true);
+  }, []);
+
+  const handleStaffGallery = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      setPostFoundPhoto({ uri: asset.uri, name: asset.uri.split("/").pop() || `lostfound_${Date.now()}.jpg` });
+    } catch {}
+  }, []);
+
+  const handleStaffCamera = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) return;
+      const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8 });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      setPostFoundPhoto({ uri: asset.uri, name: asset.uri.split("/").pop() || `lostfound_${Date.now()}.jpg` });
+    } catch {}
   }, []);
 
   const resetPostFoundForm = useCallback(() => {
@@ -780,7 +769,13 @@ return () => {};
           </KeyboardAvoidingView>
         </Modal>
 
-        {imageViewerUri && <ImageViewer uri={imageViewerUri} visible={!!imageViewerUri} onClose={() => setImageViewerUri(null)} />}
+    {imageViewerUri && <ImageViewer uri={imageViewerUri} visible={!!imageViewerUri} onClose={() => setImageViewerUri(null)} />}
+        <AttachmentPickerModal
+          visible={staffPickerVisible}
+          onClose={() => setStaffPickerVisible(false)}
+          onGallery={handleStaffGallery}
+          onCamera={handleStaffCamera}
+        />
       </View>
     </ScreenWrapper>
   );

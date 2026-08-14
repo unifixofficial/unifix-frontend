@@ -1,9 +1,9 @@
 import ScreenWrapper from "@/wrappers/ScreenWrapper";
+import CallConfirmationModal from "@/components/CallConfirmationModal";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { memo, useCallback, useEffect, useState } from "react";
 import {
-  Alert,
   Linking,
   RefreshControl,
   ScrollView, StatusBar,
@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { getAccessToken } from '@/utils/secureAuth';
+import { getValidAccessToken } from '@/utils/secureAuth';
 import { loadUserCache } from '@/utils/cache';
 import { useLoadingStore } from "../../store/loadingStore";
 import { getStudentComplaintsFromDb, syncStudentComplaints } from '../../sync/syncManager';
@@ -73,7 +73,8 @@ const SCREEN_KEY = 'my-complaints';
   const [complaints, setComplaints] = useState<RecentComplaint[]>([]);
   const [loading, setLoading] = useState(!isLoaded(SCREEN_KEY));
   const [refreshing, setRefreshing] = useState(false);
-  const [filterTab, setFilterTab] = useState<FilterTab>("all");
+const [filterTab, setFilterTab] = useState<FilterTab>("all");
+  const [callModal, setCallModal] = useState<{ phone: string; name: string } | null>(null);
 const router = useRouter();
   const { forceSync } = useLocalSearchParams<{ forceSync?: string }>();
 
@@ -91,20 +92,13 @@ const onRefresh = useCallback(async () => {
     setRefreshing(false);
   }, [fetchComplaints]);
 
-  const handleCall = useCallback((phone: string, name: string) => {
-    Alert.alert(
-      `Call ${name}`,
-      `Do you want to call ${name} at ${phone}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Call", onPress: () => Linking.openURL(`tel:${phone}`) },
-      ]
-    );
+const handleCall = useCallback((phone: string, name: string) => {
+    setCallModal({ phone, name });
   }, []);
 
 useEffect(() => {
     const init = async () => {
-      const token = await getAccessToken();
+      const token = await getValidAccessToken();
       if (!token) { router.replace("/login" as any); return; }
       const cached = loadUserCache();
       const uid = cached?.uid;
@@ -132,8 +126,18 @@ useEffect(() => {
 
   return (
     <ScreenWrapper loading={loading} skeleton="complaint">
-      <View style={s.root}>
+ <View style={s.root}>
         <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+        <CallConfirmationModal
+          visible={!!callModal}
+          name={callModal?.name}
+          phone={callModal?.phone ?? ""}
+          onCancel={() => setCallModal(null)}
+          onConfirm={() => {
+            if (callModal) Linking.openURL(`tel:${callModal.phone}`)
+            setCallModal(null)
+          }}
+        />
         <View style={s.header}>
           <TouchableOpacity onPress={() => {
 const cached = loadUserCache();

@@ -14,14 +14,13 @@ import {
 } from "@react-native-firebase/messaging";
 import { Stack, useRouter } from "expo-router";
 import * as Updates from "expo-updates";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import NetInfo from "@react-native-community/netinfo";
+import ConfirmModal from "@/components/ConfirmModal";
 import {
-  Alert,
   Animated,
   BackHandler,
-  InteractionManager,
   Modal,
   Platform,
   Pressable,
@@ -32,11 +31,7 @@ import {
 import { getDb } from "../db/database";
 
 import Toast from "react-native-toast-message";
-import {
-  AdminDashboardSkeleton,
-  DashboardSkeleton,
-  StaffDashboardSkeleton,
-} from "../components/skeleton";
+
 import { authAPI } from "../services/api";
 
 Notifications.setNotificationHandler({
@@ -59,12 +54,10 @@ if (Platform.OS === "android") {
 }
 
 const EXIT_ROUTES = [
-  "/",
-  "/(student)/index",
+  "/(student)/Home",
   "/(staff)/staff-dashboard",
   "/(admin)/admin-dashboard",
 ];
-
 async function registerForPushNotifications(): Promise<string | null> {
   try {
     if (!Device.isDevice) return null;
@@ -113,94 +106,22 @@ async function savePushTokenToServer(token: string) {
   }
 }
 
-function UnifixSplash() {
-  const opacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(opacity, {
-      toValue: 1,
-      duration: 180,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  return (
-    <View style={splashStyles.container}>
-      <Animated.Image
-        source={require("../assets/1.png")}
-        style={[splashStyles.logo, { opacity }]}
-        resizeMode="contain"
-      />
-      <View style={splashStyles.footer}>
-        <Animated.Text style={[splashStyles.from, { opacity }]}>
-          from
-        </Animated.Text>
-        <Animated.Text style={[splashStyles.name, { opacity }]}>
-          VCET
-        </Animated.Text>
-      </View>
-    </View>
-  );
-}
-
-const splashStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "white",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 40,
-  },
-  logo: {
-    width: 180,
-    height: 180,
-  },
-  footer: {
-    position: "absolute",
-    bottom: 40,
-    alignItems: "center",
-    gap: 2,
-  },
-  from: {
-    fontSize: 13,
-    color: "#94a3b8",
-    fontWeight: "400",
-    letterSpacing: 0.5,
-  },
-  name: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#16a34a",
-    letterSpacing: 2,
-  },
-});
-
 export default function RootLayout() {
   const router = useRouter();
-  const [appReady, setAppReady] = useState(false);
-  const [initialRoute, setInitialRoute] = useState<string | null>(null);
-  const [minSplashDone, setMinSplashDone] = useState(false);
-  const hasNavigatedRef = useRef(false);
-  const showRoleOverlayRef = useRef<((role: string) => void) | null>(null);
-  const [cachedRole, setCachedRole] = useState<string | null>(null);
   const currentRouteRef = useRef<string | null>(null);
   const notificationListener = useRef<Notifications.EventSubscription | null>(null);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
-  const [updateAvailable, setUpdateAvailable] = useState(false);
+const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
   const [updatingApp, setUpdatingApp] = useState(false);
-
-  useEffect(() => {
-    if (initialRoute) currentRouteRef.current = initialRoute;
-  }, [initialRoute]);
+  const [exitModalVisible, setExitModalVisible] = useState(false);
 
   useEffect(() => {
     if (__DEV__) return;
     const checkForUpdates = async () => {
       try {
         const update = await Updates.checkForUpdateAsync();
-        if (update.isAvailable) {
-          setUpdateAvailable(true);
+     if (update.isAvailable) {
           const result = await Updates.fetchUpdateAsync();
           if (result.isNew) {
             setUpdateDownloaded(true);
@@ -223,22 +144,10 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS !== "android") return;
 
-    const onBackPress = () => {
+const onBackPress = () => {
       const route = currentRouteRef.current;
       if (route && EXIT_ROUTES.includes(route)) {
-        Alert.alert(
-          "Exit App",
-          "Are you sure you want to exit?",
-          [
-            { text: "Cancel", style: "cancel", onPress: () => {} },
-            {
-              text: "OK",
-              style: "destructive",
-              onPress: () => BackHandler.exitApp(),
-            },
-          ],
-          { cancelable: true }
-        );
+        setExitModalVisible(true);
         return true;
       }
       return false;
@@ -249,165 +158,11 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-      const cachedUser = loadUserCache();
-
-if (cachedUser && cachedUser.uid && cachedUser.role && cachedUser.route) {
-          currentRouteRef.current = cachedUser.route;
-          setInitialRoute(cachedUser.route);
-          setCachedRole(cachedUser.role);
-          setAppReady(true);
-        }
-     const accessToken = await getAccessToken();
-
-        if (!accessToken) {
-          clearUserCache();
-          if (!currentRouteRef.current) {
-            currentRouteRef.current = "/login";
-            setInitialRoute("/login");
-            setAppReady(true);
-          } else {
-            router.replace("/login" as any);
-          }
-          return;
-        }
-
-        const alreadyRouted = !!currentRouteRef.current;
-        const cacheAgeMs = cachedUser?.cachedAt
-          ? Date.now() - cachedUser.cachedAt
-          : Infinity;
-        const CACHE_TTL = 30 * 60 * 1000;
-
-if (alreadyRouted && cacheAgeMs < CACHE_TTL) {
-          setAppReady(true);
-          try {
-            const pushToken = await registerForPushNotifications();
-            if (pushToken) await authAPI.savePushToken(pushToken).catch(() => {});
-          } catch {}
-          return;
-        }
-
-        const netState = await NetInfo.fetch();
-        const online = !!(netState.isConnected && netState.isInternetReachable);
-
-        if (!online && alreadyRouted) {
-          return;
-        }
-
-        if (!online && !alreadyRouted && cachedUser?.uid && cachedUser?.route) {
-          currentRouteRef.current = cachedUser.route;
-          setInitialRoute(cachedUser.route);
-          setAppReady(true);
-          return;
-        }
-
-        let profile: any = null;
-        try {
-          const res = await authAPI.myProfile();
-          profile = res?.data?.profile ?? res?.profile ?? null;
-        } catch (err: any) {
-          const netState2 = await NetInfo.fetch();
-          const stillOnline = !!(netState2.isConnected && netState2.isInternetReachable);
-
-          if (!stillOnline && alreadyRouted) {
-            return;
-          }
-
-    await clearAuthTokens();
-          clearUserCache();
-          if (!alreadyRouted) {
-            currentRouteRef.current = "/login";
-            setInitialRoute("/login");
-            setAppReady(true);
-          } else {
-            router.replace("/login" as any);
-          }
-          return;
-        }
-
-        if (!profile) {
-          await clearAuthTokens();
-          clearUserCache();
-          if (!alreadyRouted) {
-            currentRouteRef.current = "/login";
-            setInitialRoute("/login");
-            setAppReady(true);
-          } else {
-            router.replace("/login" as any);
-          }
-          return;
-        }
-
-        if (!profile.profileCompleted) {
-          clearUserCache();
-          const target = "/complete-profile";
-          if (!alreadyRouted) {
-            currentRouteRef.current = target;
-            setInitialRoute(target);
-            setAppReady(true);
-          } else {
-            router.replace(target as any);
-          }
-          return;
-        }
-
-        const { role, verificationStatus } = profile;
-
-      if (role === "staff" && verificationStatus !== "approved") {
-          clearUserCache();
-          const target = "/complete-profile";
-          if (!alreadyRouted) {
-            currentRouteRef.current = target;
-            setInitialRoute(target);
-            setAppReady(true);
-          } else {
-            router.replace(target as any);
-          }
-          return;
-        }
-
-        const route =
-          role === "admin"
-            ? "/admin-dashboard"
-            : role === "staff" && verificationStatus === "approved"
-            ? "/staff-dashboard"
-            : "/";
-
- saveUserCache({
-          uid: profile.id,
-          role,
-          route,
-          fullName: profile.fullName || "",
-          email: profile.email || "",
-        });
-
-if (!hasNavigatedRef.current) {
-          currentRouteRef.current = route;
-          setInitialRoute(route);
-          setCachedRole(role);
-          setAppReady(true);
-        } else if (route !== currentRouteRef.current) {
-          router.replace(route as any);
-        }
-
-        try {
-          const pushToken = await registerForPushNotifications();
-          if (pushToken) savePushTokenToServer(pushToken);
-        } catch {}
-      } catch (err) {
-        currentRouteRef.current = "/login";
-        setInitialRoute("/login");
-        setAppReady(true);
-      }
-    };
+    const m = getMessaging();
 
     getDb().catch(() => {});
-    initAuth();
 
-  const m = getMessaging();
-
-const foregroundUnsub = onMessage(m, async (remoteMessage) => {
+    const foregroundUnsub = onMessage(m, async (remoteMessage) => {
       const title = remoteMessage.notification?.title ?? remoteMessage.data?.title as string;
       const body = remoteMessage.notification?.body ?? remoteMessage.data?.body as string;
       if (!title && !body) return;
@@ -423,7 +178,6 @@ const foregroundUnsub = onMessage(m, async (remoteMessage) => {
     });
 
     const tokenRefreshUnsub = onTokenRefresh(m, async (newToken: string) => {
-      console.log("[Push] FCM token refreshed");
       await savePushTokenToServer(newToken);
     });
 
@@ -438,7 +192,7 @@ const foregroundUnsub = onMessage(m, async (remoteMessage) => {
         if (!data) return;
 
         try {
-        const cached = loadUserCache();
+          const cached = loadUserCache();
           if (!cached) return;
 
           const { role, verificationStatus } = cached;
@@ -495,7 +249,7 @@ const foregroundUnsub = onMessage(m, async (remoteMessage) => {
               data.complaintId
             ) {
               router.push({
-                pathname: "/",
+                pathname: "/(student)/Home",
                 params: {
                   openTab: "complaints",
                   openComplaintId: data.complaintId || null,
@@ -516,19 +270,19 @@ const foregroundUnsub = onMessage(m, async (remoteMessage) => {
                   ? "lostreports"
                   : "lost-history";
               router.push({
-                pathname: "/",
+                pathname: "/(student)/Home",
                 params: { openTab: "lostfound", openLFTab: lfTab },
               } as any);
             } else {
-              router.push("/" as any);
+              router.push("/(student)/Home" as any);
             }
           }
         } catch {
-          router.push("/" as any);
+          router.push("/(student)/Home" as any);
         }
       });
 
-return () => {
+    return () => {
       foregroundUnsub();
       tokenRefreshUnsub();
       if (notificationListener.current)
@@ -538,19 +292,15 @@ return () => {
   }, []);
 
   useEffect(() => {
-    setTimeout(() => setMinSplashDone(true), 200);
-  }, []);
-
-  useEffect(() => {
     const originalHandler = ErrorUtils.getGlobalHandler();
-ErrorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
+    ErrorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
       if (error?.message === "SESSION_EXPIRED") {
         clearAuthTokens().then(() => {
           clearUserCache();
           mmkvDelete("unifix_active_tab");
           mmkvDelete("unifix_staff_active_tab");
           mmkvDelete("unifix_admin_active_tab");
-          router.replace("/login" as any);
+        router.replace("/(auth)/login" as any);
         });
         return;
       }
@@ -561,61 +311,19 @@ ErrorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
     };
   }, []);
 
-useEffect(() => {
-    if (appReady && initialRoute && minSplashDone && !hasNavigatedRef.current) {
-      hasNavigatedRef.current = true;
-      setTimeout(() => {
-        Animated.timing(skeletonAnim, {
-          toValue: 0,
-          duration: 250,
-          useNativeDriver: true,
-        }).start(() => setSkeletonVisible(false));
-      }, 100);
-    }
-  }, [appReady, initialRoute, minSplashDone]);
-
-  const [skeletonVisible, setSkeletonVisible] = useState(true);
-  const skeletonAnim = useRef(new Animated.Value(1)).current;
-  const [overlayRole, setOverlayRole] = useState<string | null>(null);
-
-  const showRoleOverlay = useCallback((role: string) => {
-    setOverlayRole(role);
-    setSkeletonVisible(true);
-    skeletonAnim.setValue(1);
-    setTimeout(() => {
-      Animated.timing(skeletonAnim, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true,
-      }).start(() => setSkeletonVisible(false));
-    }, 800);
-  }, []);
-
-  useEffect(() => {
-    showRoleOverlayRef.current = showRoleOverlay;
-    (global as any).__unifixShowRoleOverlay = showRoleOverlay;
-  }, [showRoleOverlay]);
-
-  useEffect(() => {
-    if (appReady && minSplashDone && hasNavigatedRef.current) {
-      setSkeletonVisible(false);
-      skeletonAnim.setValue(0);
-    }
-  }, [appReady, minSplashDone]);
-
-  function getRoleSkeletonOrSplash() {
-    if (cachedRole === "staff") return <StaffDashboardSkeleton />;
-    if (cachedRole === "admin") return <AdminDashboardSkeleton />;
-    if (cachedRole === "student" || cachedRole === "teacher")
-      return <DashboardSkeleton />;
-    return <UnifixSplash />;
-  }
-
-if (!appReady || !minSplashDone || !initialRoute) {
-    return getRoleSkeletonOrSplash();
-  }
   return (
-    <>
+ <>
+      <ConfirmModal
+        visible={exitModalVisible}
+        variant="confirm"
+        title="Exit App"
+        message="Are you sure you want to exit?"
+        confirmText="Exit"
+        cancelText="Cancel"
+        destructive
+        onCancel={() => setExitModalVisible(false)}
+        onConfirm={() => { setExitModalVisible(false); BackHandler.exitApp(); }}
+      />
       <Modal
         visible={updateDownloaded}
         transparent
@@ -651,59 +359,18 @@ if (!appReady || !minSplashDone || !initialRoute) {
           </View>
         </View>
       </Modal>
-      <Stack
-        screenOptions={{ headerShown: false }}
-        initialRouteName={
-          initialRoute === "/admin-dashboard"
-            ? "(admin)/admin-dashboard"
-            : initialRoute === "/staff-dashboard"
-            ? "(staff)/staff-dashboard"
-            : initialRoute === "/login"
-            ? "(auth)/login"
-            : initialRoute === "/complete-profile"
-            ? "(auth)/complete-profile"
-            : "(student)/index"
-        }
-      >
-        <Stack.Screen name="(student)/index" />
-        <Stack.Screen name="(auth)/login" />
-        <Stack.Screen name="(auth)/signup" />
-        <Stack.Screen name="(auth)/otp-verification" />
-        <Stack.Screen name="(auth)/reset-password" />
-        <Stack.Screen name="(auth)/complete-profile" />
-        <Stack.Screen name="(auth)/select-role" />
-        <Stack.Screen name="(student)/submit-complaint" />
-        <Stack.Screen name="(student)/complaint-success" />
-        <Stack.Screen name="(student)/my-complaints" />
-        <Stack.Screen name="(staff)/staff-dashboard" />
-        <Stack.Screen name="(student)/report-ragging" />
-        <Stack.Screen name="(admin)/admin-dashboard" />
-        <Stack.Screen name="(admin)/MaintenanceScreen" />
-        <Stack.Screen name="(admin)/StaffUsersScreen" />
-        <Stack.Screen name="(admin)/IdCardsScreen" />
-        <Stack.Screen name="(admin)/DeletionsScreen" />
-        <Stack.Screen name="(admin)/SecurityScreen" />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(student)" options={{ headerShown: false }} />
+        <Stack.Screen name="(staff)" options={{ headerShown: false }} />
+        <Stack.Screen name="(admin)" options={{ headerShown: false }} />
         <Stack.Screen
           name="legal/terms-and-conditions"
           options={{ headerShown: false }}
         />
-        <Stack.Screen
-          name="(student)/modal"
-          options={{ presentation: "modal" }}
-        />
       </Stack>
       <Toast />
-      {skeletonVisible && (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFillObject,
-            { opacity: skeletonAnim, zIndex: 999, backgroundColor: "white" },
-          ]}
-        >
-          {null}
-        </Animated.View>
-      )}
     </>
   );
 }
@@ -769,35 +436,4 @@ const updateStyles = StyleSheet.create({
     width: "100%",
   },
   laterText: { color: "#94a3b8", fontSize: 14, fontWeight: "500" },
-});
-
-const styles = StyleSheet.create({
-  splash: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingBottom: 60,
-    paddingTop: 0,
-  },
-  splashCenter: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  vcetContainer: {
-    alignItems: "center",
-    gap: 4,
-  },
-  vcetFrom: {
-    fontSize: 12,
-    color: "#94a3b8",
-    fontWeight: "400",
-  },
-  vcetText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#16a34a",
-    letterSpacing: 2,
-  },
 });

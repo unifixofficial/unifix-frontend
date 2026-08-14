@@ -1,13 +1,12 @@
 import { router } from "expo-router";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import ConfirmModal from "@/components/ConfirmModal";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Image,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -21,7 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { getAccessToken, clearAuthTokens } from '@/utils/secureAuth';
+import { getValidAccessToken, clearAuthTokens } from '@/utils/secureAuth';
 import { clearUserCache } from '@/utils/cache';
 
 import { authAPI } from "../../services/api";
@@ -119,6 +118,9 @@ export default function StaffProfileScreen() {
   const [securityError, setSecurityError] = useState("");
   const [securitySuccess, setSecuritySuccess] = useState("");
 
+const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [logoutAllModalVisible, setLogoutAllModalVisible] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error" | "info";
@@ -168,8 +170,8 @@ useEffect(() => {
       setPhotoUploading(true);
 const url = await uploadToCloudinary(result.assets[0].uri, "unifix/profiles");
       await authAPI.updateProfile(staffData?.fullName || "", staffData?.phone || "");
-      const token = await getAccessToken();
-      await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/complete-profile`, {
+    const token = await getValidAccessToken();
+      await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/complete-profile`,{
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ photoUrl: url }),
@@ -243,49 +245,34 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
     }
   }, [currentPassword, newPassword, confirmPassword]);
 
-  const handleLogoutAllDevices = useCallback(() => {
-    Alert.alert("Logout All Devices", "This will end all active sessions.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Confirm",
-        style: "destructive",
-       onPress: async () => {
-         try {
-              await authAPI.logoutAllDevices();
-                await clearAuthTokens();
-                clearUserCache();
-                router.replace("/login" as any);
-              } catch {}
-        },
-      },
-    ]);
+const handleLogoutAllDevices = useCallback(() => {
+    setLogoutAllModalVisible(true);
+  }, []);
+
+  const executeLogoutAllDevices = useCallback(async () => {
+    setLogoutAllModalVisible(false);
+    try {
+      await authAPI.logoutAllDevices();
+      await clearAuthTokens();
+      clearUserCache();
+      router.replace("/login" as any);
+    } catch {}
   }, []);
 
   const handleDeleteAccount = useCallback(() => {
-    Alert.alert(
-      "Delete Account",
-      "Your deletion request will be sent to admin for approval.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Submit Request",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const data = await authAPI.deleteAccount();
-              if (data.requiresApproval)
-                Alert.alert(
-                  "Request Submitted",
-                  "Your account deletion request has been submitted and is currently under review.",
-                );
-            } catch (err: any) {
-              Alert.alert("Error", err.message || "Failed to submit request.");
-            }
-          },
-        },
-      ],
-    );
+    setDeleteModalVisible(true);
   }, []);
+
+  const executeDeleteAccount = useCallback(async () => {
+    setDeleteModalVisible(false);
+    try {
+      const data = await authAPI.deleteAccount();
+      if (data.requiresApproval)
+        showToast("Your account deletion request has been submitted and is currently under review.", "info");
+    } catch (err: any) {
+      showToast(err.message || "Failed to submit request.", "error");
+    }
+  }, [showToast]);
 
   const handleSubmitSecurityIssue = useCallback(async () => {
     setSecurityError("");
@@ -311,12 +298,12 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
     }
   }, [securityIssueType, securityDescription]);
 
-  const renderProfileMain = () => (
+const renderProfileMain = () => (
     <ScrollView
       style={s.tabScroll}
-   contentContainerStyle={[
+      contentContainerStyle={[
         s.tabContainer,
-        { paddingBottom: insets.bottom + 80 },
+        { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 80 },
       ]}
     >
       <View style={s.subHeader}>
@@ -401,29 +388,12 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
             color: "#0f172a",
             onPress: () => navigateTo("legal"),
           },
-       {
+{
             icon: "log-out-outline" as keyof typeof Ionicons.glyphMap,
             bg: "#fef2f2",
             label: "Log Out",
             color: "#dc2626",
-            onPress: () => {
-              Alert.alert(
-                "Log Out",
-                "Are you sure you want to log out?",
-                [
-                  { text: "No", style: "cancel" },
-                  {
-                    text: "Yes",
-                    style: "destructive",
-   onPress: async () => {
-              await clearAuthTokens();
-              clearUserCache();
-              router.replace("/login" as any);
-            },
-                  },
-                ]
-              );
-            },
+            onPress: () => setLogoutModalVisible(true),
           },
         ].map((item, index, arr) => (
           <TouchableOpacity
@@ -451,9 +421,9 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <ScrollView
+<ScrollView
         style={s.tabScroll}
-        contentContainerStyle={[s.tabContainer, { paddingBottom: 40 }]}
+        contentContainerStyle={[s.tabContainer, { paddingTop: insets.top + 16, paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={s.subPageHeader}>
@@ -580,9 +550,9 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <ScrollView
+  <ScrollView
         style={s.tabScroll}
-        contentContainerStyle={[s.tabContainer, { paddingBottom: 40 }]}
+        contentContainerStyle={[s.tabContainer, { paddingTop: insets.top + 16, paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={s.subPageHeader}>
@@ -703,9 +673,9 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <ScrollView
+<ScrollView
         style={s.tabScroll}
-        contentContainerStyle={[s.tabContainer, { paddingBottom: 40 }]}
+        contentContainerStyle={[s.tabContainer, { paddingTop: insets.top + 16, paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={s.subPageHeader}>
@@ -783,7 +753,7 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
 const renderSettings = () => (
     <ScrollView
       style={s.tabScroll}
-      contentContainerStyle={[s.tabContainer, { paddingBottom: 40 }]}
+      contentContainerStyle={[s.tabContainer, { paddingTop: insets.top + 16, paddingBottom: 40 }]}
       showsVerticalScrollIndicator={false}
     >
       <View style={s.subPageHeader}>
@@ -859,10 +829,10 @@ const renderSettings = () => (
     </ScrollView>
   );
 
- const renderLegal = () => (
+const renderLegal = () => (
     <ScrollView
       style={s.tabScroll}
-      contentContainerStyle={[s.tabContainer, { paddingBottom: 40 }]}
+      contentContainerStyle={[s.tabContainer, { paddingTop: insets.top + 16, paddingBottom: 40 }]}
       showsVerticalScrollIndicator={false}
     >
       <View style={s.subPageHeader}>
@@ -872,15 +842,15 @@ const renderSettings = () => (
         <Text style={s.subPageTitle}>Legal</Text>
       </View>
       {[
-        { label: "Terms & Conditions", icon: "document-text-outline", url: "https://unifixapp.vercel.app/terms" },
-        { label: "Privacy Policy", icon: "shield-checkmark-outline", url: "https://unifixapp.vercel.app/privacy" },
-        { label: "Copyright", icon: "copyright-outline", url: "https://unifixapp.vercel.app/copyright" },
+    { label: "Terms & Conditions", icon: "document-text-outline", type: "terms" },
+        { label: "Privacy Policy", icon: "shield-checkmark-outline", type: "privacy" },
+      { label: "Copyright", icon: "ribbon-outline", type: "copyright" },
       ].map((item, index) => (
         <TouchableOpacity
           key={index}
           style={s.legalRow}
           activeOpacity={0.85}
-          onPress={() => { if (item.url) Linking.openURL(item.url); }}
+        onPress={() => router.push({ pathname: "/legal/terms-and-conditions", params: { type: item.type } } as any)}
         >
           <View style={s.menuCardLeft}>
             <View style={[s.settingIcon, { backgroundColor: "#f0f9ff" }]}>
@@ -894,8 +864,49 @@ const renderSettings = () => (
     </ScrollView>
   );
 
-  return (
+return (
     <View style={{ flex: 1, backgroundColor: "#f8fafc" }}>
+<ConfirmModal
+        visible={logoutModalVisible}
+        title="Log Out"
+        message="Are you sure you want to log out?"
+        confirmText="Log Out"
+        cancelText="Cancel"
+        destructive
+        showIcon={false}
+        onCancel={() => setLogoutModalVisible(false)}
+        onConfirm={async () => {
+          setLogoutModalVisible(false);
+          await clearAuthTokens();
+          clearUserCache();
+          const { useLoadingStore } = require('@/store/loadingStore');
+          useLoadingStore.getState().clearPersistedState();
+          router.replace("/(auth)/login" as any);
+        }}
+      />
+<ConfirmModal
+        visible={logoutAllModalVisible}
+        variant="confirm"
+        destructive
+        showIcon={false}
+        title="Logout All Devices"
+        message="This will end all active sessions."
+        confirmText="Confirm"
+        cancelText="Cancel"
+        onCancel={() => setLogoutAllModalVisible(false)}
+        onConfirm={executeLogoutAllDevices}
+      />
+      <ConfirmModal
+        visible={deleteModalVisible}
+        variant="confirm"
+        destructive
+        title="Delete Account"
+        message="Your deletion request will be sent to admin for approval."
+        confirmText="Submit Request"
+        cancelText="Cancel"
+        onCancel={() => setDeleteModalVisible(false)}
+        onConfirm={executeDeleteAccount}
+      />
       {profileScreen === "main" && renderProfileMain()}
       {profileScreen === "personalInfo" && renderPersonalInfo()}
       {profileScreen === "changePassword" && renderChangePassword()}
@@ -945,11 +956,10 @@ const renderSettings = () => (
 const s = StyleSheet.create({
   tabScroll: { flex: 1 },
   tabContainer: { paddingHorizontal: 16 },
-  subHeader: {
+subHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingTop: 56,
     paddingBottom: 16,
     paddingHorizontal: 4,
     borderBottomWidth: 1,
@@ -1088,12 +1098,11 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   settingLabel: { fontSize: 14, fontWeight: "600", color: "#0f172a", flex: 1 },
-  subPageHeader: {
+subPageHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
     marginBottom: 20,
-    paddingTop: 56,
   },
   backBtn: {
     width: 38,
