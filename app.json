@@ -12,15 +12,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.unifix.app",
-      "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "Allow UniFiX to access your photo library to upload images.",
-        "NSCameraUsageDescription": "Allow UniFiX to access your camera to upload photos.",
-        "NSMicrophoneUsageDescription": "Allow UniFiX to access your microphone."
-      }
-    },
+
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

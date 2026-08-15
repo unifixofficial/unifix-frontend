@@ -64,8 +64,8 @@ export const syncClaims = async (): Promise<void> => {
     const since = await getMeta('lf_claims_synced_at');
     const data = await lostFoundAPI.claimsSince(since ? parseInt(since) : null);
     if (data?.items?.length > 0) await upsertClaims(data.items);
-    await setMeta('lf_claims_hash', hashRes?.hash);
-    await setMeta('lf_claims_synced_at', String(hashRes?.serverTime));
+ if (hashRes?.hash) await setMeta('lf_claims_hash', hashRes.hash);
+    if (hashRes?.serverTime) await setMeta('lf_claims_synced_at', String(hashRes.serverTime));
   } catch {}
 };
 

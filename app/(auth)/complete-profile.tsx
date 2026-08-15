@@ -304,6 +304,8 @@ const gst = StyleSheet.create({
 export default function CompleteProfileScreen() {
 const [uid, setUid] = useState<string | null>(null);
   const [role, setRole] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
@@ -332,10 +334,12 @@ getAccessToken().then(async (token) => {
         return;
       }
       try {
-        const res = await authAPI.myProfile();
- const data = res.profile;
+   const res = await authAPI.myProfile();
+        const data = res.profile;
         setUid(data.id);
         setRole(data.role || "");
+        setFullName(data.fullName || "");
+        setEmail(data.email || "");
         if (!data.profileCompleted) {
           setFromRoleSelect(true);
         }
@@ -482,12 +486,20 @@ const token = await getAccessToken();
         body: JSON.stringify(updateData),
       });
 
-      let route = "/";
-      if (role === "staff") {
-        route = "/complete-profile";
-      }
+const route = role === "staff" ? "/complete-profile" : "/(student)/Home";
 
-      saveUserCache({ uid, role, route });
+      saveUserCache({
+        uid,
+        role,
+        route,
+        fullName,
+        email,
+        phone: phone.trim(),
+        gender,
+        photoUrl: null,
+        profileCompleted: true,
+        verificationStatus: role === "staff" ? "pending" : null,
+      });
 
       if (role === "staff") {
         try {
@@ -498,8 +510,8 @@ const token = await getAccessToken();
         } catch {}
         setPendingApproval(true);
       } else {
-        router.replace("/" as any);
-      } 
+        router.replace("/(student)/Home" as any);
+      }
     } catch {
       setError("Failed to save profile. Please try again.");
     } finally {

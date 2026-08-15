@@ -6,11 +6,9 @@ import * as Notifications from "expo-notifications";
 import {
   getMessaging,
   getToken,
-  requestPermission,
   onTokenRefresh,
   onMessage,
   setBackgroundMessageHandler,
-  AuthorizationStatus,
 } from "@react-native-firebase/messaging";
 import { Stack, useRouter } from "expo-router";
 import * as Updates from "expo-updates";
@@ -58,55 +56,14 @@ const EXIT_ROUTES = [
   "/(staff)/staff-dashboard",
   "/(admin)/admin-dashboard",
 ];
-async function registerForPushNotifications(): Promise<string | null> {
-  try {
-    if (!Device.isDevice) return null;
-
-    if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync("default", {
-        name: "default",
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: "#16a34a",
-        sound: "default",
-      });
-    }
-
-    const m = getMessaging();
-    const authStatus = await requestPermission(m);
-    const granted =
-      authStatus === AuthorizationStatus.AUTHORIZED ||
-      authStatus === AuthorizationStatus.PROVISIONAL;
-
-    if (!granted) {
-      console.warn("[Push] FCM permission not granted");
-      return null;
-    }
-
-    const fcmToken = await getToken(m);
-    if (!fcmToken) {
-      console.warn("[Push] No FCM token returned");
-      return null;
-    }
-
-    return fcmToken;
-  } catch (e) {
-    console.error("[Push] Registration error:", e);
-    return null;
-  }
-}
-
 async function savePushTokenToServer(token: string) {
   try {
     const { getAccessToken } = await import('@/utils/secureAuth');
     const accessToken = await getAccessToken();
     if (!accessToken) return;
     await authAPI.savePushToken(token);
-  } catch (e) {
-    console.error("[Push] Save token error:", e);
-  }
+  } catch {}
 }
-
 export default function RootLayout() {
   const router = useRouter();
   const currentRouteRef = useRef<string | null>(null);
