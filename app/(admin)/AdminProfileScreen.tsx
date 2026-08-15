@@ -51,18 +51,36 @@ const [profileScreen, setProfileScreen] = useState<"main" | "legal" | "settings"
 
 const handleLogout = useCallback(async () => {
     try {
-     const token = await getValidAccessToken();
-      if (token) {
-        await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/logout-all-devices`,{
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      }
+      const { getMessaging, getToken } = require("@react-native-firebase/messaging");
+      const fcmToken = await getToken(getMessaging()).catch(() => null);
+      const { authAPI } = require("../../services/api");
+      await authAPI.logoutAllDevices(fcmToken);
     } catch {}
     await clearAuthTokens();
     clearUserCache();
+    const { mmkvDelete } = require('@/utils/mmkv');
+    mmkvDelete("unifix_cached_user");
+    mmkvDelete("unifix_active_tab");
+    mmkvDelete("unifix_staff_active_tab");
+    mmkvDelete("unifix_admin_active_tab");
+    mmkvDelete("unifix_push_token");
+    mmkvDelete("lf_feed_hash");
+    mmkvDelete("lf_claims_hash");
+    mmkvDelete("lr_feed_hash");
+    mmkvDelete("lf_feed_synced_at");
+    mmkvDelete("lf_claims_synced_at");
+    mmkvDelete("lr_feed_synced_at");
+    mmkvDelete("lf_myposts_synced_at");
+    mmkvDelete("student_complaints_hash");
+    mmkvDelete("student_complaints_synced_at");
+    mmkvDelete("staff_complaints_hash");
+    mmkvDelete("staff_complaints_synced_at");
+    mmkvDelete("admin_complaints_hash");
+    mmkvDelete("admin_complaints_synced_at");
     const { useLoadingStore } = require('@/store/loadingStore');
     useLoadingStore.getState().clearPersistedState();
+    const { resetDb } = require('../../db/database');
+    await resetDb();
     router.replace("/(auth)/login" as any);
   }, [router]);
 

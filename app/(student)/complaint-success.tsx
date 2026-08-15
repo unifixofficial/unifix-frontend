@@ -37,9 +37,9 @@ export default function ComplaintSuccessScreen() {
         </TouchableOpacity>
    <TouchableOpacity
           style={s.homeBtn}
-         onPress={() => {
+     onPress={() => {
             useLoadingStore.getState().setActiveTab("student", "home");
-            router.replace("/?openTab=home" as any);
+            router.replace("/(student)/Home" as any);
           }}
           activeOpacity={0.85}
         >

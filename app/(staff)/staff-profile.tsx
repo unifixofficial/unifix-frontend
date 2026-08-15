@@ -875,12 +875,38 @@ return (
         destructive
         showIcon={false}
         onCancel={() => setLogoutModalVisible(false)}
-        onConfirm={async () => {
+   onConfirm={async () => {
           setLogoutModalVisible(false);
+          try {
+            const { getMessaging, getToken } = require("@react-native-firebase/messaging");
+            const fcmToken = await getToken(getMessaging()).catch(() => null);
+            await authAPI.logoutAllDevices(fcmToken);
+          } catch {}
           await clearAuthTokens();
           clearUserCache();
+          const { mmkvDelete } = require('@/utils/mmkv');
+          mmkvDelete("unifix_cached_user");
+          mmkvDelete("unifix_active_tab");
+          mmkvDelete("unifix_staff_active_tab");
+          mmkvDelete("unifix_admin_active_tab");
+          mmkvDelete("unifix_push_token");
+          mmkvDelete("lf_feed_hash");
+          mmkvDelete("lf_claims_hash");
+          mmkvDelete("lr_feed_hash");
+          mmkvDelete("lf_feed_synced_at");
+          mmkvDelete("lf_claims_synced_at");
+          mmkvDelete("lr_feed_synced_at");
+          mmkvDelete("lf_myposts_synced_at");
+          mmkvDelete("student_complaints_hash");
+          mmkvDelete("student_complaints_synced_at");
+          mmkvDelete("staff_complaints_hash");
+          mmkvDelete("staff_complaints_synced_at");
+          mmkvDelete("admin_complaints_hash");
+          mmkvDelete("admin_complaints_synced_at");
           const { useLoadingStore } = require('@/store/loadingStore');
           useLoadingStore.getState().clearPersistedState();
+          const { resetDb } = require('../../db/database');
+          await resetDb();
           router.replace("/(auth)/login" as any);
         }}
       />

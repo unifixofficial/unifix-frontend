@@ -34,8 +34,8 @@ const data = await complaintsAPI.myComplaintsSince(since ? parseInt(since) : nul
       await upsertComplaints(incoming);
     }
 
-    await setMeta(STUDENT_HASH_KEY, newHash);
-    await setMeta(STUDENT_SYNC_KEY, String(hashRes.serverTime));
+if (newHash) await setMeta(STUDENT_HASH_KEY, newHash);
+    if (hashRes?.serverTime) await setMeta(STUDENT_SYNC_KEY, String(hashRes.serverTime));
 } catch (e: any) {
     if (e?.message === 'SESSION_EXPIRED') return;
     console.error('[sync] syncStudentComplaints error:', e?.message, e?.stack, JSON.stringify(e));
@@ -72,8 +72,8 @@ const data = await complaintsAPI.allComplaintsSince(since ? parseInt(since) : nu
     
     }
 
-    await setMeta(ADMIN_HASH_KEY, newHash);
-    await setMeta(ADMIN_SYNC_KEY, String(hashRes.serverTime));
+  if (newHash) await setMeta(ADMIN_HASH_KEY, newHash);
+    if (hashRes?.serverTime) await setMeta(ADMIN_SYNC_KEY, String(hashRes.serverTime));
   } catch (e: any) {
     console.error('[sync] syncAdminComplaints error:', e?.message, e?.stack, JSON.stringify(e));
   }
@@ -123,8 +123,8 @@ export const syncStaffComplaints = async (): Promise<void> => {
     const seen = new Set<string>();
     const unique = combined.filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; });
     if (unique.length > 0) await upsertComplaints(unique);
-    await setMeta(STAFF_HASH_KEY, newHash);
-    await setMeta(STAFF_SYNC_KEY, String(hashRes.serverTime));
+  if (newHash) await setMeta(STAFF_HASH_KEY, newHash);
+    if (hashRes?.serverTime) await setMeta(STAFF_SYNC_KEY, String(hashRes.serverTime));
   } catch (e) {
     console.error('[sync] syncStaffComplaints error:', e);
   }

@@ -439,7 +439,7 @@ const lastBgTime = useRef<number | null>(null);
 
   const { isLoaded, markLoaded, setDataCache, getDataCache } = useLoadingStore();
   const [complaints, setComplaints] = useState<Complaint[]>(() => getDataCache('complaints') ?? []);
- const [complaintsLoading, setComplaintsLoading] = useState(false);
+const [complaintsLoading, setComplaintsLoading] = useState(true);
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
 
   const [userRole, setUserRole] = useState<string>("");
@@ -567,7 +567,32 @@ const fetchProfile = useCallback(async () => {
     }
   }, []);
 
-const registerPushToken = useCallback(async () => {}, []);
+const registerPushToken = useCallback(async () => {
+  try {
+    const { getMessaging, getToken, requestPermission, AuthorizationStatus } = await import("@react-native-firebase/messaging");
+    const m = getMessaging();
+    console.log("[Push] Requesting permission...");
+    const authStatus = await requestPermission(m);
+    console.log("[Push] Permission status:", authStatus); 
+    const granted =
+      authStatus === AuthorizationStatus.AUTHORIZED ||
+      authStatus === AuthorizationStatus.PROVISIONAL;
+    if (!granted) {
+      console.log("[Push] Permission not granted:", authStatus);
+      return;
+    }
+    const fcmToken = await getToken(m);
+    if (!fcmToken) {
+      console.log("[Push] No FCM token returned");
+      return;
+    }
+    console.log("[Push] FCM token:", fcmToken);
+    await authAPI.savePushToken(fcmToken);
+    console.log("[Push] Token saved to server successfully");
+  } catch (e) {
+    console.log("[Push] Error:", e);
+  }
+}, []);
 
  
 
@@ -596,17 +621,22 @@ const registerPushToken = useCallback(async () => {}, []);
           getLostReportsFromDb(),
           getAllClaimsFromDb(),
         ]);
-    if (localComplaints.length > 0) setComplaints(localComplaints as any);
+  if (localComplaints.length > 0) {
+          setComplaints(localComplaints as any);
+          setComplaintsLoading(false);
+        }
         if (localFeed.length > 0) setFeedItems(localFeed.map((item: any) => ({ ...item, isMyPost: item.postedBy === uid })) as any);
         if (localReports.length > 0) {
           setLostReports(localReports as any);
           setUserLostReports(localReports.filter((r: any) => r.postedByUid === uid) as any);
         }
         if (localClaims.length > 0) setClaimItems(localClaims as any);
-  if (alreadyFetched) {
+if (alreadyFetched) {
+          fetchComplaints(uid, true);
+          fetchLostFound(uid, true);
+          await registerPushToken();
           return;
         }
-
         markLoaded("dashboard");
         try {
           const res = await authAPI.myProfile();
@@ -618,8 +648,10 @@ const registerPushToken = useCallback(async () => {}, []);
         } catch {
         }
 
-        fetchComplaints(uid);
-        fetchLostFound(uid);
+        await Promise.all([
+          fetchComplaints(uid),
+          fetchLostFound(uid),
+        ]);
         await fetchProfile();
         await registerPushToken();
       } catch {
@@ -718,7 +750,7 @@ const handleLogout = useCallback(async () => {
       const fcmToken = await getToken(getMessaging()).catch(() => null);
       await authAPI.logoutAllDevices(fcmToken);
     } catch {}
-await clearAuthTokens();
+    await clearAuthTokens();
     mmkvDelete("unifix_cached_user");
     mmkvDelete("unifix_active_tab");
     mmkvDelete("unifix_staff_active_tab");
@@ -727,12 +759,17 @@ await clearAuthTokens();
     mmkvDelete("lf_feed_hash");
     mmkvDelete("lf_claims_hash");
     mmkvDelete("lr_feed_hash");
-mmkvDelete("lf_feed_synced_at");
+    mmkvDelete("lf_feed_synced_at");
     mmkvDelete("lf_claims_synced_at");
     mmkvDelete("lr_feed_synced_at");
     mmkvDelete("lf_myposts_synced_at");
+    mmkvDelete("student_complaints_hash");
+    mmkvDelete("student_complaints_synced_at");
+    mmkvDelete("staff_complaints_hash");
+    mmkvDelete("staff_complaints_synced_at");
+    mmkvDelete("admin_complaints_hash");
+    mmkvDelete("admin_complaints_synced_at");
     useLoadingStore.getState().clearPersistedState();
-  useLoadingStore.getState().clearPersistedState();
     const { resetDb } = await import("../../db/database");
     await resetDb();
     router.replace("/login" as any);
@@ -892,7 +929,18 @@ return (
                 Welcome back to your campus dashboard
               </Text>
             </View>
-            {recentComplaints.length > 0 ? (
+    {complaintsLoading && recentComplaints.length === 0 ? (
+              <View style={s.activityLoadingWrap}>
+                <View style={s.sectionRow}>
+                  <Text style={s.sectionTitle}>Recent Activity</Text>
+                </View>
+                <View style={s.activityLoadingCard}>
+                  <View style={s.activityLoadingBar} />
+                  <View style={[s.activityLoadingBar, { width: "60%", marginTop: 10 }]} />
+                  <View style={[s.activityLoadingBar, { width: "80%", marginTop: 10 }]} />
+                </View>
+              </View>
+            ) : recentComplaints.length > 0 ? (
               <>
                 <View style={s.sectionRow}>
                   <Text style={s.sectionTitle}>Recent Activity</Text>
@@ -1138,12 +1186,27 @@ container: { paddingHorizontal: 20, paddingTop: 20 },
     color: "#374151",
     marginBottom: 6,
   },
-  emptyStateSub: {
+emptyStateSub: {
     fontSize: 13,
     color: "#94a3b8",
     textAlign: "center",
     lineHeight: 20,
     marginBottom: 20,
+  },
+  activityLoadingWrap: { width: "100%" },
+  activityLoadingCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 14,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: "#f1f5f9",
+    marginBottom: 8,
+  },
+  activityLoadingBar: {
+    height: 12,
+    width: "100%",
+    backgroundColor: "#f1f5f9",
+    borderRadius: 6,
   },
   bottomNav: {
     flexDirection: "row",

@@ -115,6 +115,7 @@ function formatDateShort(ts: any): string {
   if (!ts) return "—";
   let ms: number | null = null;
   if (typeof ts === "number") ms = ts * 1000;
+  else if (typeof ts === "string") ms = new Date(ts).getTime();
   else if (ts?.toDate) ms = ts.toDate().getTime();
   else if (ts?._seconds) ms = ts._seconds * 1000;
   else if (ts?.seconds) ms = ts.seconds * 1000;

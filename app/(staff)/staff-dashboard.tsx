@@ -337,15 +337,20 @@ const refetchAll = useCallback(async (uid: string, skipCache = false, silent = f
     }
   }, []);
 
-  const registerPushToken = useCallback(async () => {
-    try {
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== "granted") return;
-      const token = (await Notifications.getExpoPushTokenAsync()).data;
-      if (token) await authAPI.savePushToken(token);
-    } catch {}
-  }, []);
-
+const registerPushToken = useCallback(async () => {
+  try {
+    const { getMessaging, getToken, requestPermission, AuthorizationStatus } = await import("@react-native-firebase/messaging");
+    const m = getMessaging();
+    const authStatus = await requestPermission(m);
+    const granted =
+      authStatus === AuthorizationStatus.AUTHORIZED ||
+      authStatus === AuthorizationStatus.PROVISIONAL;
+    if (!granted) return;
+    const fcmToken = await getToken(m);
+    if (!fcmToken) return;
+    await authAPI.savePushToken(fcmToken);
+  } catch {}
+}, []);
 useEffect(() => {
     const bootstrap = async () => {
       const cachedUser = await loadUserCache();

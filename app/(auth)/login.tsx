@@ -37,17 +37,17 @@ export default function LoginScreen() {
     GoogleSignin.configure({ webClientId: WEB_CLIENT_ID, offlineAccess: false });
   }, []);
 
- const navigateByUser = async (userData: any, token: string, refreshToken: string) => {
+const navigateByUser = async (userData: any, token: string, refreshToken: string) => {
     await setAccessToken(token);
     await setRefreshToken(refreshToken);
 
-    let route = "/";
+    let route = "/(student)/Home";
     if (userData.role === "admin") {
-      route = "/admin-dashboard";
+      route = "/(admin)/admin-dashboard";
     } else if (userData.role === "staff" && userData.verificationStatus === "approved") {
-      route = "/staff-dashboard";
+      route = "/(staff)/staff-dashboard";
     } else if (!userData.profileCompleted) {
-      route = "/complete-profile";
+      route = "/(auth)/complete-profile";
     }
 
     saveUserCache({
@@ -67,7 +67,6 @@ export default function LoginScreen() {
     }
     router.replace(route as any);
   };
-
 const handleLogin = async () => {
     setError("");
     setResetMessage("");
@@ -120,6 +119,17 @@ const handleLogin = async () => {
 if (!userData.role) {
         await setAccessToken(token);
         await setRefreshToken(refreshToken);
+        saveUserCache({
+          uid: userData.uid,
+          role: userData.role || "",
+          fullName: userData.fullName || "",
+          email: userData.email || "",
+          phone: userData.phone || null,
+          gender: userData.gender || null,
+          photoUrl: userData.photoUrl || null,
+          profileCompleted: false,
+          verificationStatus: userData.verificationStatus || null,
+        });
         router.replace("/select-role" as any);
         return;
       }
@@ -127,6 +137,17 @@ if (!userData.role) {
       if (!userData.profileCompleted) {
         await setAccessToken(token);
         await setRefreshToken(refreshToken);
+        saveUserCache({
+          uid: userData.uid,
+          role: userData.role || "",
+          fullName: userData.fullName || "",
+          email: userData.email || "",
+          phone: userData.phone || null,
+          gender: userData.gender || null,
+          photoUrl: userData.photoUrl || null,
+          profileCompleted: false,
+          verificationStatus: userData.verificationStatus || null,
+        });
         router.replace("/complete-profile" as any);
         return;
       }

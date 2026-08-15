@@ -37,8 +37,8 @@ export const syncLostFoundFeed = async (): Promise<void> => {
     const data = await lostFoundAPI.feedSince(since ? parseInt(since) : null);
     // console.log('[lf] feed data:', data);
     if (data?.items?.length > 0) await upsertLostFoundItems(data.items);
-    await setMeta('lf_feed_hash', hashRes?.hash);
-    await setMeta('lf_feed_synced_at', String(hashRes?.serverTime));
+   if (hashRes?.hash) await setMeta('lf_feed_hash', hashRes.hash);
+    if (hashRes?.serverTime) await setMeta('lf_feed_synced_at', String(hashRes.serverTime));
   } catch (e) { console.error('[lf] syncLostFoundFeed error:', e); }
 };
 

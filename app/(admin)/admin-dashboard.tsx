@@ -165,10 +165,10 @@ useEffect(() => {
 
 useEffect(() => {
     mountedRef.current = true;
-    getValidAccessToken().then((token) => {
-      if (token) {
-        fetchAdminData();
-        registerAdminPushToken();
+    getValidAccessToken().then(async (token) => {
+    if (token) {
+        await fetchAdminData();
+        await registerAdminPushToken();
       } else {
         setLoading(false);
         setDataReady(true);
@@ -181,16 +181,16 @@ useEffect(() => {
 
 async function registerAdminPushToken() {
     try {
-      const { mmkvGet, mmkvSet } = require('@/utils/mmkv');
-      const already = mmkvGet("unifix_push_registered");
-      if (already) return;
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== "granted") return;
-      const token = (await Notifications.getExpoPushTokenAsync()).data;
-      if (token) {
-        await authAPI.savePushToken(token);
-        mmkvSet("unifix_push_registered", "1");
-      }
+      const { getMessaging, getToken, requestPermission, AuthorizationStatus } = await import("@react-native-firebase/messaging");
+      const m = getMessaging();
+      const authStatus = await requestPermission(m);
+      const granted =
+        authStatus === AuthorizationStatus.AUTHORIZED ||
+        authStatus === AuthorizationStatus.PROVISIONAL;
+      if (!granted) return;
+      const fcmToken = await getToken(m);
+      if (!fcmToken) return;
+      await authAPI.savePushToken(fcmToken);
     } catch {
     }
   }

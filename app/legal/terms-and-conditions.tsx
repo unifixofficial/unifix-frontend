@@ -11,10 +11,10 @@ export default function TermsAndConditionsScreen() {
 
   const url =
     type === "privacy"
-      ? "https://unifixapp.vercel.app/privacy"
+      ? "https://unifix-app.onrender.com/privacy"
       : type === "copyright"
-      ? "https://unifixapp.vercel.app/copyright"
-      : "https://unifixapp.vercel.app/terms";
+      ? "https://unifix-app.onrender.com/copyright"
+      : "https://unifix-app.onrender.com/terms";
 
   const injectScript = `
     const style = document.createElement('style');

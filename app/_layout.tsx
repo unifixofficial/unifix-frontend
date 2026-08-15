@@ -98,9 +98,10 @@ async function registerForPushNotifications(): Promise<string | null> {
 
 async function savePushTokenToServer(token: string) {
   try {
-    console.log("[Push] Registering FCM token");
+    const { getAccessToken } = await import('@/utils/secureAuth');
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
     await authAPI.savePushToken(token);
-    console.log("[Push] FCM token saved successfully");
   } catch (e) {
     console.error("[Push] Save token error:", e);
   }
