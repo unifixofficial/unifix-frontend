@@ -19,31 +19,49 @@ const getToken = async (): Promise<string> => {
   return token;
 };
 
+let refreshPromise: Promise<string> | null = null;
+
 const refreshAccessToken = async (): Promise<string> => {
-  const refreshToken = await getRefreshToken();
-  if (!refreshToken) throw new Error('SESSION_EXPIRED');
+  if (refreshPromise) return refreshPromise;
 
-  const res = await fetch(`${BASE_URL}/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
-  });
+  refreshPromise = (async (): Promise<string> => {
+    try {
+      const refreshToken = await getRefreshToken();
+      if (!refreshToken) throw new Error('SESSION_EXPIRED');
 
-  if (!res.ok) {
-    await clearAuthTokens();
-    clearSessionData();
-    throw new Error('SESSION_EXPIRED');
-  }
+      const res = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
 
-  const data = await res.json();
-  const token = data?.data?.token ?? data?.token;
-  const newRefresh = data?.data?.refreshToken ?? data?.refreshToken;
-  if (!token) throw new Error('SESSION_EXPIRED');
-  await setAccessToken(token);
-  await setRefreshToken(newRefresh);
-  return token;
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          await clearAuthTokens();
+          clearSessionData();
+          throw new Error('SESSION_EXPIRED');
+        }
+        throw new Error('REFRESH_FAILED');
+      }
+
+      const data = await res.json();
+      const token = data?.data?.token ?? data?.token;
+      const newRefresh = data?.data?.refreshToken ?? data?.refreshToken;
+      if (!token) {
+        await clearAuthTokens();
+        clearSessionData();
+        throw new Error('SESSION_EXPIRED');
+      }
+      await setAccessToken(token);
+      if (newRefresh) await setRefreshToken(newRefresh);
+      return token;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 };
-
 const request = async (
   method: string,
   endpoint: string,

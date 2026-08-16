@@ -304,8 +304,18 @@ const activeTabRef = useRef<TabType>(activeTab);
       }).start(() => setToast(null));
     }, 3000);
   }, [toastAnim]);
- const subscribeToComplaints = useCallback((uid: string) => {
+const subscribeToComplaints = useCallback((uid: string) => {
     // Replaced by SQLite sync no live Firestore listeners needed
+  }, []);
+
+const refreshStaffProfile = useCallback((uid: string) => {
+    authAPI.myProfile().then((res) => {
+      if (res?.profile) {
+        setStaffData(res.profile as any);
+        const { mmkvSetJSON } = require('@/utils/mmkv');
+        mmkvSetJSON(`user_${uid}`, res.profile);
+      }
+    }).catch(() => {});
   }, []);
 
 const refetchAll = useCallback(async (uid: string, skipCache = false, silent = false) => {
@@ -335,17 +345,28 @@ const refetchAll = useCallback(async (uid: string, skipCache = false, silent = f
         setRefreshing(false);
       }
     }
+
+    try {
+      const profileRes = await authAPI.myProfile();
+      if (profileRes?.profile) {
+        setAvgRating(profileRes.profile.avgRating ?? null);
+        setRatingCount(profileRes.profile.ratingCount ?? 0);
+      }
+    } catch {}
   }, []);
 
 const registerPushToken = useCallback(async () => {
   try {
-    const { getMessaging, getToken, requestPermission, AuthorizationStatus } = await import("@react-native-firebase/messaging");
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    if (existingStatus !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== "granted") {
+        Linking.openSettings();
+        return;
+      }
+    }
+    const { getMessaging, getToken } = await import("@react-native-firebase/messaging");
     const m = getMessaging();
-    const authStatus = await requestPermission(m);
-    const granted =
-      authStatus === AuthorizationStatus.AUTHORIZED ||
-      authStatus === AuthorizationStatus.PROVISIONAL;
-    if (!granted) return;
     const fcmToken = await getToken(m);
     if (!fcmToken) return;
     await authAPI.savePushToken(fcmToken);
@@ -373,6 +394,8 @@ useEffect(() => {
         setDataReady(true);
         setLoading(false);
         setSkeletonEnabled(false);
+
+      refreshStaffProfile(cachedUser.uid);
 
         // background: subscribe + refetch
         subscribeToComplaints(cachedUser.uid);
@@ -946,9 +969,8 @@ const BOTTOM_TABS = useMemo<{
 </View>
 
 <View style={{ flex: 1, display: activeTab === "profile" ? "flex" : "none" }}>
-  <StaffProfileScreen />
+  <StaffProfileScreen onProfileUpdate={() => staffUid && refreshStaffProfile(staffUid)} />
 </View>
-
         <View
           style={[
             s.bottomBar,

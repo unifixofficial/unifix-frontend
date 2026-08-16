@@ -7,6 +7,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ConfirmModal from "@/components/ConfirmModal";
 import {
   AppState, AppStateStatus,
+  Linking,
   StatusBar,
   StyleSheet,
   Text,
@@ -181,20 +182,21 @@ useEffect(() => {
 
 async function registerAdminPushToken() {
     try {
-      const { getMessaging, getToken, requestPermission, AuthorizationStatus } = await import("@react-native-firebase/messaging");
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      if (existingStatus !== "granted") {
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status !== "granted") {
+          Linking.openSettings();
+          return;
+        }
+      }
+      const { getMessaging, getToken } = await import("@react-native-firebase/messaging");
       const m = getMessaging();
-      const authStatus = await requestPermission(m);
-      const granted =
-        authStatus === AuthorizationStatus.AUTHORIZED ||
-        authStatus === AuthorizationStatus.PROVISIONAL;
-      if (!granted) return;
       const fcmToken = await getToken(m);
       if (!fcmToken) return;
       await authAPI.savePushToken(fcmToken);
-    } catch {
-    }
+    } catch {}
   }
-
 useEffect(() => {
     const handleNotificationData = (data: any) => {
       const { type } = data || {};

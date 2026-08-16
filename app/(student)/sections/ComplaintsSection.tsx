@@ -220,7 +220,7 @@ const updated = await complaintsAPI.getById(complaint.id);
     pollingRef.current = setInterval(() => pollComplaint(complaint.id), 8000);
   }, [onComplaintsRefreshed, pollComplaint]);
 
-  const handleSubmitRating = useCallback(async () => {
+const handleSubmitRating = useCallback(async () => {
     if (selectedStars === 0) {
       setRatingError("Please select a star rating.");
       return;
@@ -234,16 +234,26 @@ const updated = await complaintsAPI.getById(complaint.id);
         selectedStars,
         ratingComment.trim(),
       );
+      await upsertComplaints([{
+        ...ratingComplaint,
+        rating: selectedStars,
+        ratingComment: ratingComment.trim() || null,
+      }]);
       setRatingVisible(false);
       setRatingComplaint(null);
       setSelectedStars(0);
       setRatingComment("");
+      if (onComplaintsRefreshed) {
+        const cachedUser = loadUserCache();
+        const fresh = await getStudentComplaintsFromDb(cachedUser?.uid ?? "");
+        onComplaintsRefreshed(fresh as any);
+      }
     } catch (err: any) {
       setRatingError(err.message || "Failed to submit rating.");
     } finally {
       setRatingLoading(false);
     }
-  }, [ratingComplaint, selectedStars, ratingComment]);
+  }, [ratingComplaint, selectedStars, ratingComment, onComplaintsRefreshed]);
 
   const renderInteractiveStars = (count: number, size: number = 28) => (
     <View style={{ flexDirection: "row", gap: 6 }}>

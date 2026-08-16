@@ -484,8 +484,9 @@ const forceRefreshLostReports = useCallback(async () => {
     const uid = currentUserId;
     if (!uid) return;
     await syncLostReports(true);
-    const reportsUpdated = await getLostReportsFromDb();
+  const reportsUpdated = await getLostReportsFromDb();
     setLostReports(reportsUpdated as any);
+    setUserLostReports(reportsUpdated.filter((r: any) => r.isMyPost === true || r.postedByUid === uid || (r as any).postedBy?.uid === uid) as any);
     setUserLostReports(reportsUpdated.filter((r: any) => r.postedByUid === uid || r.isMyPost === true) as any);
   }, []);
 
@@ -540,8 +541,8 @@ await Promise.all([
       ]);
 
   setFeedItems(feedUpdated.map((item: any) => ({ ...item, isMyPost: item.postedBy === uid || item.isMyPost === true })) as any);
-      setLostReports(reportsUpdated as any);
-  setUserLostReports(reportsUpdated.filter((r: any) => r.postedByUid === uid || r.isMyPost === true) as any);
+     setLostReports(reportsUpdated as any);
+  setUserLostReports(reportsUpdated.filter((r: any) => r.isMyPost === true || r.postedByUid === uid || (r as any).postedBy?.uid === uid) as any);
       setClaimItems(claimsUpdated as any);
       setDataCache('feedItems', feedUpdated);
       setDataCache('lostReports', reportsUpdated);
@@ -569,29 +570,20 @@ const fetchProfile = useCallback(async () => {
 
 const registerPushToken = useCallback(async () => {
   try {
-    const { getMessaging, getToken, requestPermission, AuthorizationStatus } = await import("@react-native-firebase/messaging");
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    if (existingStatus !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== "granted") {
+        Linking.openSettings();
+        return;
+      }
+    }
+    const { getMessaging, getToken } = await import("@react-native-firebase/messaging");
     const m = getMessaging();
-    console.log("[Push] Requesting permission...");
-    const authStatus = await requestPermission(m);
-    console.log("[Push] Permission status:", authStatus); 
-    const granted =
-      authStatus === AuthorizationStatus.AUTHORIZED ||
-      authStatus === AuthorizationStatus.PROVISIONAL;
-    if (!granted) {
-      console.log("[Push] Permission not granted:", authStatus);
-      return;
-    }
     const fcmToken = await getToken(m);
-    if (!fcmToken) {
-      console.log("[Push] No FCM token returned");
-      return;
-    }
-    console.log("[Push] FCM token:", fcmToken);
+    if (!fcmToken) return;
     await authAPI.savePushToken(fcmToken);
-    console.log("[Push] Token saved to server successfully");
-  } catch (e) {
-    console.log("[Push] Error:", e);
-  }
+  } catch {}
 }, []);
 
  
@@ -626,9 +618,9 @@ const registerPushToken = useCallback(async () => {
           setComplaintsLoading(false);
         }
         if (localFeed.length > 0) setFeedItems(localFeed.map((item: any) => ({ ...item, isMyPost: item.postedBy === uid })) as any);
-        if (localReports.length > 0) {
+      if (localReports.length > 0) {
           setLostReports(localReports as any);
-          setUserLostReports(localReports.filter((r: any) => r.postedByUid === uid) as any);
+          setUserLostReports(localReports.filter((r: any) => r.isMyPost === true || r.postedByUid === uid || (r as any).postedBy?.uid === uid) as any);
         }
         if (localClaims.length > 0) setClaimItems(localClaims as any);
 if (alreadyFetched) {

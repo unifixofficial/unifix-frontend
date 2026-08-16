@@ -12,7 +12,6 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -22,8 +21,8 @@
       "googleServicesFile": "./google-services.json",
       "jsEngine": "hermes",
       "allowBackup": false,
-      "versionCode": 1,
-"permissions": [
+      
+      "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -47,7 +46,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
+          "icon": "./assets/notification.png",
           "sounds": []
         }
       ],
@@ -77,7 +76,7 @@
       "typedRoutes": true
     },
     "updates": {
-      "url": "https://u.expo.dev/4d7d0e4b-d763-41e9-833b-843af45047c7"
+      "url": "https://u.expo.dev/3b0736e7-eb68-44f4-8ce7-3b9b6e165fa8"
     },
     "runtimeVersion": {
       "policy": "appVersion"
@@ -88,9 +87,8 @@
       },
       "router": {},
       "eas": {
-        "projectId": "4d7d0e4b-d763-41e9-833b-843af45047c7"
+        "projectId": "3b0736e7-eb68-44f4-8ce7-3b9b6e165fa8"
       }
-    },
-    "owner": "unifix-official"
+    }
   }
 }

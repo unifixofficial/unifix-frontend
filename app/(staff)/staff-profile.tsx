@@ -21,9 +21,10 @@ import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { getValidAccessToken, clearAuthTokens } from '@/utils/secureAuth';
-import { clearUserCache } from '@/utils/cache';
+import { clearUserCache, loadUserCache } from '@/utils/cache';
 
 import { authAPI } from "../../services/api";
+import { getStaffComplaintsFromDb, syncStaffComplaints } from "../../sync/syncManager";
 
 
 const CLOUDINARY_CLOUD = "dcizaxjul";
@@ -54,6 +55,8 @@ const SECURITY_ISSUE_TYPES = [
   "Other",
 ];
 
+const MONTHLY_TARGET = 50;
+
 type StaffData = {
   fullName: string;
   email: string;
@@ -64,6 +67,8 @@ type StaffData = {
   photoUrl?: string;
   gender?: string;
   nationalIdCardUrl?: string;
+  avgRating?: number | null;
+  ratingCount?: number;
 };
 
 type ProfileScreen =
@@ -73,7 +78,7 @@ type ProfileScreen =
   | "reportSecurity"
   | "settings"
   | "legal";
-export default function StaffProfileScreen() {
+export default function StaffProfileScreen({ onProfileUpdate }: { onProfileUpdate?: () => void }) {
   const insets = useSafeAreaInsets();
 
   const [staffData, setStaffData] = useState<StaffData | null>(null);
@@ -150,13 +155,40 @@ const [logoutModalVisible, setLogoutModalVisible] = useState(false);
     [toastAnim],
   );
 
-useEffect(() => {
+const computeMonthlyCompleted = useCallback((complaints: any[], uid: string) => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000;
+    return complaints.filter((c) => {
+      if (c.status !== 'completed' || c.assignedTo !== uid) return false;
+      const completedSeconds = c.completedAt?._seconds ?? null;
+      return completedSeconds !== null && completedSeconds >= monthStart;
+    }).length;
+  }, []);
+
+  useEffect(() => {
     authAPI.myProfile().then((res) => {
       if (res?.profile) setStaffData(res.profile as any);
     }).catch(() => {});
-  }, []);
 
-  const handlePickPhoto = useCallback(async () => {
+    (async () => {
+      const cachedUser = loadUserCache();
+      const uid = cachedUser?.uid;
+      if (!uid) return;
+
+      const local = await getStaffComplaintsFromDb(uid);
+      if (local.length > 0) {
+        setCompletedCount(computeMonthlyCompleted(local, uid));
+      }
+
+      try {
+        await syncStaffComplaints();
+        const updated = await getStaffComplaintsFromDb(uid);
+        setCompletedCount(computeMonthlyCompleted(updated, uid));
+      } catch {}
+    })();
+  }, [computeMonthlyCompleted]);
+
+const handlePickPhoto = useCallback(async () => {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) return;
@@ -167,21 +199,23 @@ useEffect(() => {
         quality: 0.8,
       });
       if (result.canceled) return;
-      setPhotoUploading(true);
-const url = await uploadToCloudinary(result.assets[0].uri, "unifix/profiles");
-      await authAPI.updateProfile(staffData?.fullName || "", staffData?.phone || "");
-    const token = await getValidAccessToken();
-      await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/complete-profile`,{
+    setPhotoUploading(true);
+      const url = await uploadToCloudinary(result.assets[0].uri, "unifix/profiles");
+      const token = await getValidAccessToken();
+      const res = await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/complete-profile`,{
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ photoUrl: url }),
       });
+ const resJson = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(resJson?.error || `Upload save failed (${res.status})`);
       setStaffData((prev) => (prev ? { ...prev, photoUrl: url } : prev));
-    } catch {
+      onProfileUpdate?.();
+    } catch (err: any) {
     } finally {
       setPhotoUploading(false);
     }
-  }, []);
+  }, [onProfileUpdate]);
 
   const handleSaveProfile = useCallback(async () => {
     setProfileError("");
@@ -200,13 +234,14 @@ await authAPI.updateProfile(editName.trim(), editPhone.trim());
       setStaffData((prev) =>
         prev ? { ...prev, fullName: editName.trim(), phone: editPhone.trim() } : prev,
       );
-      setProfileSuccess("Profile updated successfully.");
+setProfileSuccess("Profile updated successfully.");
+      onProfileUpdate?.();
     } catch (err: any) {
       setProfileError(err.message || "Failed.");
     } finally {
       setProfileSaving(false);
     }
-  }, [editName, editPhone]);
+  }, [editName, editPhone, onProfileUpdate]);
 
   const handleChangePassword = useCallback(async () => {
     setPwError("");
@@ -342,9 +377,9 @@ const renderProfileMain = () => (
         <View style={s.idBadge}>
           <Text style={s.idBadgeText}>Staff ID: {staffData?.employeeId || "—"}</Text>
         </View>
-        <View style={s.profilePerfBox}>
+<View style={s.profilePerfBox}>
           <Text style={s.profilePerfLabel}>MONTHLY PERFORMANCE</Text>
-          <Text style={s.profilePerfScore}>{completedCount} / 150</Text>
+          <Text style={s.profilePerfScore}>{completedCount} / {MONTHLY_TARGET}</Text>
           <Text style={s.profilePerfSub}>Completed Tasks</Text>
           <Text style={s.profilePerfDesc}>
             Total: {completedCount} tasks completed this month
@@ -353,7 +388,7 @@ const renderProfileMain = () => (
             <View
               style={[
                 s.progressBarFill,
-                { width: `${Math.min(completedCount * 2, 100)}%` as any },
+                { width: `${Math.min((completedCount / MONTHLY_TARGET) * 100, 100)}%` as any },
               ]}
             />
           </View>
@@ -1094,7 +1129,7 @@ subHeader: {
     marginBottom: 2,
   },
   profilePerfDesc: { fontSize: 12, color: "#64748b", marginBottom: 8 },
-  progressBarWrap: { height: 5, backgroundColor: "#e2e8f0", borderRadius: 3 },
+progressBarWrap: { height: 5, backgroundColor: "#e2e8f0", borderRadius: 3 },
   progressBarFill: {
     height: "100%",
     backgroundColor: "#16a34a",

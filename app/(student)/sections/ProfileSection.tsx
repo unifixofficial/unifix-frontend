@@ -41,6 +41,7 @@ type UserData = {
   teacherIdCardUrl?: string;
   rollNumber?: string;
   teacherId?: string;
+  authProvider?: string;
 };
 
 type ProfileScreen =
@@ -161,10 +162,11 @@ const [idCardUploading, setIdCardUploading] = useState(false);
     () => userData?.studentIdCardUrl || userData?.teacherIdCardUrl || null,
     [userData?.studentIdCardUrl, userData?.teacherIdCardUrl]
   );
-  const uniqueId = useMemo(
+const uniqueId = useMemo(
     () => userData?.role === "student" ? userData?.rollNumber : userData?.teacherId,
     [userData?.role, userData?.rollNumber, userData?.teacherId]
   );
+  const isGoogleUser = useMemo(() => userData?.authProvider === "google", [userData?.authProvider]);
 
    const handlePickPhoto = useCallback(async () => {
     try {
@@ -763,7 +765,37 @@ const renderPersonalInfo = () => (
     </ScrollView>
   );
 
-  const renderChangePassword = () => (
+const renderChangePassword = () => {
+    if (isGoogleUser) {
+      return (
+        <ScrollView
+          style={s.scroll}
+          contentContainerStyle={[s.container, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={s.subPageHeader}>
+            <TouchableOpacity style={s.backBtn} onPress={goBack}>
+              <Ionicons name="arrow-back" size={20} color="#0f172a" />
+            </TouchableOpacity>
+            <Text style={s.subPageTitle}>Change Password</Text>
+          </View>
+          <View style={s.formCard}>
+            <Text style={s.formSectionLabel}>ACCOUNT SECURITY</Text>
+            <View style={s.googleInfoIconWrap}>
+              <Ionicons name="logo-google" size={32} color="#16a34a" />
+            </View>
+            <Text style={s.googleInfoTitle}>Your account uses Google Sign-In</Text>
+            <Text style={s.googleInfoText}>
+              This account does not have a separate UniFiX password. Password changes are managed through your Google Account.
+            </Text>
+            <TouchableOpacity style={s.saveBtn} onPress={goBack}>
+              <Text style={s.saveBtnText}>Back to Settings</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      );
+    }
+    return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -891,7 +923,7 @@ const renderPersonalInfo = () => (
               pwLoading || !currentPassword || !newPassword || !confirmPassword
             }
           >
-            {pwLoading ? (
+        {pwLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={s.saveBtnText}>Change Password</Text>
@@ -900,7 +932,8 @@ const renderPersonalInfo = () => (
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
-  );
+    );
+  };
 
   const renderReportSecurity = () => (
     <KeyboardAvoidingView
@@ -1467,5 +1500,29 @@ container: { paddingHorizontal: 20 },
   },
   issueTypeChipActive: { backgroundColor: "#f0fdf4", borderColor: "#16a34a" },
   issueTypeChipText: { fontSize: 13, fontWeight: "600", color: "#64748b" },
-  issueTypeChipTextActive: { color: "#16a34a", fontWeight: "700" },
+issueTypeChipTextActive: { color: "#16a34a", fontWeight: "700" },
+  googleInfoIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#f0fdf4",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  googleInfoTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0f172a",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  googleInfoText: {
+    fontSize: 13,
+    color: "#64748b",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 20,
+  },
 });

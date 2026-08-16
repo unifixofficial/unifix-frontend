@@ -50,7 +50,7 @@ const navigateByUser = async (userData: any, token: string, refreshToken: string
       route = "/(auth)/complete-profile";
     }
 
-    saveUserCache({
+saveUserCache({
       uid: userData.uid,
       role: userData.role,
       route,
@@ -61,6 +61,7 @@ const navigateByUser = async (userData: any, token: string, refreshToken: string
       photoUrl: userData.photoUrl || null,
       profileCompleted: userData.profileCompleted || false,
       verificationStatus: userData.verificationStatus || null,
+      authProvider: userData.authProvider || "email",
     });
     if ((global as any).__unifixShowRoleOverlay) {
       (global as any).__unifixShowRoleOverlay(userData.role);
@@ -129,12 +130,13 @@ if (!userData.role) {
           photoUrl: userData.photoUrl || null,
           profileCompleted: false,
           verificationStatus: userData.verificationStatus || null,
+          authProvider: userData.authProvider || "google",
         });
         router.replace("/select-role" as any);
         return;
       }
 
-      if (!userData.profileCompleted) {
+if (!userData.profileCompleted) {
         await setAccessToken(token);
         await setRefreshToken(refreshToken);
         saveUserCache({
@@ -147,6 +149,7 @@ if (!userData.role) {
           photoUrl: userData.photoUrl || null,
           profileCompleted: false,
           verificationStatus: userData.verificationStatus || null,
+          authProvider: userData.authProvider || "google",
         });
         router.replace("/complete-profile" as any);
         return;
