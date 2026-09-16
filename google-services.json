@@ -1,0 +1,56 @@
+{
+  "project_info": {
+    "project_number": "855341107379",
+    "firebase_url": "https://unifix-ac990-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "unifix-ac990",
+    "storage_bucket": "unifix-ac990.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:855341107379:android:90c836abcb39f9de5188c6",
+        "android_client_info": {
+          "package_name": "com.unifix.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "855341107379-4m22vcdhmt6acjv939uvnckt8nlp3lhk.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.unifix.app",
+            "certificate_hash": "199d89b041a5bcc381cea91a208ca0213a9c3f35"
+          }
+        },
+        {
+          "client_id": "855341107379-agr36s7vnnaet3qg6ng9vn7ohe5olq99.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.unifix.app",
+            "certificate_hash": "9272bbc7233d687fa235ff5cc39912aa58568910"
+          }
+        },
+        {
+          "client_id": "855341107379-f4jslu08r8msmakj00v6sgbb2n82rg9f.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCro2vWXxLIa8FXXhWm8b6D9WSIOJfW0S0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "855341107379-f4jslu08r8msmakj00v6sgbb2n82rg9f.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

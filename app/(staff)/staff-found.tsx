@@ -401,7 +401,7 @@ const onRefresh = useCallback(async () => {
 
 useEffect(() => {
     const bootstrap = async () => {
-      // Read SQLite immediately via the sync manager — same pattern as Admin.
+      // Read SQLite immediately via the sync manager -same pattern as Admin.
       // This dismisses the skeleton before Firebase or network resolves.
       const { getLostFoundFeedFromDb, getAllClaimsFromDb, syncLostFoundFeed, syncClaims, syncMyLostFoundPosts } = await import("../../sync/lostFoundSyncManager");
    const cachedUid = ((await import("../../utils/cache").then(m => m.loadUserCache()))?.uid) ?? null;
@@ -424,7 +424,7 @@ useEffect(() => {
       setLoading(false);
       markLoaded("staffFound");
 
-      // Background network sync — never re-shows skeleton.
+      // Background network sync -never re-shows skeleton.
       if (cachedUid) {
         try {
           await Promise.all([

@@ -31,7 +31,7 @@ export const syncLostFoundFeed = async (): Promise<void> => {
     // console.log('[lf] feed hash check:', { storedHash, newHash: hashRes?.hash });
     const existing = await getLostFoundFeed();
     if (storedHash && storedHash === hashRes?.hash && existing.length > 0) { 
-      // console.log('[lf] feed hash match — skip');
+      // console.log('[lf] feed hash match -skip');
        return; }
     const since = await getMeta('lf_feed_synced_at');
     const data = await lostFoundAPI.feedSince(since ? parseInt(since) : null);
@@ -83,17 +83,17 @@ export const syncLostReports = async (forceRefresh?: boolean): Promise<void> => 
     // console.log('[lr] hashRes:', hashRes);
     const existing = await getLostReports();
     if (storedHash && storedHash === hashRes?.hash && existing.length > 0) {
-      // console.log('[lr] hash match — skip');
+      // console.log('[lr] hash match -skip');
       return;
     }
-    // console.log('[lr] hash changed — syncing...');
+    // console.log('[lr] hash changed -syncing...');
 const since = await getMeta('lr_feed_synced_at');
     if (since && !forceRefresh) {
       const data = await lostReportsAPI.feedSince(parseInt(since));
       if (data?.deletedIds?.length > 0) await deleteLostReportsByIds(data.deletedIds);
       if (data?.items?.length > 0) await upsertLostReports(data.items);
     } else {
-      // Full fetch — clear table first so hard-deleted docs don't survive
+      // Full fetch -clear table first so hard-deleted docs don't survive
       const fullData = await lostReportsAPI.feedSince(null);
       await clearLostReports();
       if (fullData?.items?.length > 0) await upsertLostReports(fullData.items);

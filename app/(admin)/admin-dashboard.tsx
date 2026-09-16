@@ -154,7 +154,7 @@ useEffect(() => {
 
   const sub = AppState.addEventListener("change", (next: AppStateStatus) => {
       if (appStateRef.current.match(/inactive|background/) && next === "active") {
-        fetchAdminData(true); // always silent — no loading state
+        fetchAdminData(true); // always silent -no loading state
       }
       appStateRef.current = next;
     });
