@@ -124,6 +124,7 @@ export default function StaffProfileScreen({ onProfileUpdate }: { onProfileUpdat
   const [securitySuccess, setSecuritySuccess] = useState("");
 
 const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutAllModalVisible, setLogoutAllModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [toast, setToast] = useState<{
@@ -426,9 +427,9 @@ const renderProfileMain = () => (
 {
             icon: "log-out-outline" as keyof typeof Ionicons.glyphMap,
             bg: "#fef2f2",
-            label: "Log Out",
+            label: isLoggingOut ? "Logging out..." : "Log Out",
             color: "#dc2626",
-            onPress: () => setLogoutModalVisible(true),
+            onPress: () => { if (!isLoggingOut) setLogoutModalVisible(true); },
           },
         ].map((item, index, arr) => (
           <TouchableOpacity
@@ -909,40 +910,57 @@ return (
         cancelText="Cancel"
         destructive
         showIcon={false}
+        loading={isLoggingOut}
         onCancel={() => setLogoutModalVisible(false)}
-   onConfirm={async () => {
-          setLogoutModalVisible(false);
+        onConfirm={async () => {
+          if (isLoggingOut) return;
+          setIsLoggingOut(true);
           try {
-            const { getMessaging, getToken } = require("@react-native-firebase/messaging");
-            const fcmToken = await getToken(getMessaging()).catch(() => null);
-            await authAPI.logoutAllDevices(fcmToken);
-          } catch {}
-          await clearAuthTokens();
-          clearUserCache();
-          const { mmkvDelete } = require('@/utils/mmkv');
-          mmkvDelete("unifix_cached_user");
-          mmkvDelete("unifix_active_tab");
-          mmkvDelete("unifix_staff_active_tab");
-          mmkvDelete("unifix_admin_active_tab");
-          mmkvDelete("unifix_push_token");
-          mmkvDelete("lf_feed_hash");
-          mmkvDelete("lf_claims_hash");
-          mmkvDelete("lr_feed_hash");
-          mmkvDelete("lf_feed_synced_at");
-          mmkvDelete("lf_claims_synced_at");
-          mmkvDelete("lr_feed_synced_at");
-          mmkvDelete("lf_myposts_synced_at");
-          mmkvDelete("student_complaints_hash");
-          mmkvDelete("student_complaints_synced_at");
-          mmkvDelete("staff_complaints_hash");
-          mmkvDelete("staff_complaints_synced_at");
-          mmkvDelete("admin_complaints_hash");
-          mmkvDelete("admin_complaints_synced_at");
-          const { useLoadingStore } = require('@/store/loadingStore');
-          useLoadingStore.getState().clearPersistedState();
-          const { resetDb } = require('../../db/database');
-          await resetDb();
-          router.replace("/(auth)/login" as any);
+            let fcmToken: string | null = null;
+            try {
+              const { getMessaging, getToken } = require("@react-native-firebase/messaging");
+              fcmToken = await Promise.race([
+                getToken(getMessaging()),
+                new Promise<null>((res) => setTimeout(() => res(null), 3000)),
+              ]).catch(() => null);
+            } catch {}
+            try {
+              await Promise.race([
+                authAPI.logoutAllDevices(fcmToken),
+                new Promise<void>((_, rej) => setTimeout(() => rej(new Error("timeout")), 5000)),
+              ]);
+            } catch {}
+            await clearAuthTokens();
+            clearUserCache();
+            const { mmkvDelete } = require('@/utils/mmkv');
+            mmkvDelete("unifix_cached_user");
+            mmkvDelete("unifix_active_tab");
+            mmkvDelete("unifix_staff_active_tab");
+            mmkvDelete("unifix_admin_active_tab");
+            mmkvDelete("unifix_push_token");
+            mmkvDelete("lf_feed_hash");
+            mmkvDelete("lf_claims_hash");
+            mmkvDelete("lr_feed_hash");
+            mmkvDelete("lf_feed_synced_at");
+            mmkvDelete("lf_claims_synced_at");
+            mmkvDelete("lr_feed_synced_at");
+            mmkvDelete("lf_myposts_synced_at");
+            mmkvDelete("student_complaints_hash");
+            mmkvDelete("student_complaints_synced_at");
+            mmkvDelete("staff_complaints_hash");
+            mmkvDelete("staff_complaints_synced_at");
+            mmkvDelete("admin_complaints_hash");
+            mmkvDelete("admin_complaints_synced_at");
+            const { useLoadingStore } = require('@/store/loadingStore');
+            useLoadingStore.getState().clearPersistedState();
+            try {
+              const { resetDb } = require('../../db/database');
+              await resetDb();
+            } catch {}
+            router.replace("/(auth)/login" as any);
+          } catch {
+            setIsLoggingOut(false);
+          }
         }}
       />
 <ConfirmModal

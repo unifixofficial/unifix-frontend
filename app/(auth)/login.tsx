@@ -5,7 +5,7 @@ import { GoogleSignin, statusCodes } from "@react-native-google-signin/google-si
 import { getAuth, GoogleAuthProvider, signInWithCredential } from "@react-native-firebase/auth";
 import Svg, { Path } from "react-native-svg";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -32,6 +32,7 @@ export default function LoginScreen() {
   const [error, setError] = useState("");
   const [resetMessage, setResetMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const authInFlightRef = useRef(false);
 
   useEffect(() => {
     GoogleSignin.configure({ webClientId: WEB_CLIENT_ID, offlineAccess: false });
@@ -69,10 +70,12 @@ saveUserCache({
     router.replace(route as any);
   };
 const handleLogin = async () => {
+    if (authInFlightRef.current) return;
     setError("");
     setResetMessage("");
     if (!email.trim()) return setError("Please enter your email.");
     if (!password) return setError("Please enter your password.");
+    authInFlightRef.current = true;
     setLoading(true);
     try {
       const data = await authAPI.login(email.trim(), password);
@@ -84,11 +87,14 @@ const handleLogin = async () => {
         setError(err.message || "Login failed. Please try again.");
       }
     } finally {
+      authInFlightRef.current = false;
       setLoading(false);
     }
   };
   const handleGoogleSignIn = async () => {
+    if (authInFlightRef.current) return;
     setError("");
+    authInFlightRef.current = true;
     setGoogleLoading(true);
     try {
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
@@ -157,7 +163,6 @@ if (!userData.profileCompleted) {
       await navigateByUser(userData, token, refreshToken);
     } catch (err: any) {
       if (err.code === statusCodes.SIGN_IN_CANCELLED || err.code === statusCodes.IN_PROGRESS) {
-        return;
       } else if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
         setError("Google Play Services not available on this device.");
       } else if (err.code === "EXISTING_PASSWORD_ACCOUNT") {
@@ -166,6 +171,7 @@ if (!userData.profileCompleted) {
         setError(err.message || "Sign-in failed. Please try again.");
       }
     } finally {
+      authInFlightRef.current = false;
       setGoogleLoading(false);
     }
   };
@@ -276,9 +282,9 @@ const handleForgotPassword = async () => {
           ) : null}
 
           <TouchableOpacity
-            style={[s.loginBtn, loading && s.btnDisabled]}
+            style={[s.loginBtn, (loading || googleLoading) && s.btnDisabled]}
             onPress={handleLogin}
-            disabled={loading}
+            disabled={loading || googleLoading}
             activeOpacity={0.85}
           >
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.loginBtnText}>Log In</Text>}
@@ -299,9 +305,9 @@ const handleForgotPassword = async () => {
           </View>
 
           <TouchableOpacity
-            style={[s.googleBtn, googleLoading && s.btnDisabled]}
+            style={[s.googleBtn, (googleLoading || loading) && s.btnDisabled]}
             onPress={handleGoogleSignIn}
-            disabled={googleLoading}
+            disabled={googleLoading || loading}
             activeOpacity={0.85}
           >
             {googleLoading ? (

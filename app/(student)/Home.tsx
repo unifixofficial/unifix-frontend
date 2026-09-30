@@ -734,38 +734,55 @@ const handleCall = useCallback((phone: string | null, name: string | null) => {
     setCallModal({ phone, name: name || "Staff" });
   }, []);
 
+const [isLoggingOut, setIsLoggingOut] = useState(false);
+
 const handleLogout = useCallback(async () => {
-    setUserRole("");
-    setLoading(false);
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
     try {
-      const { getMessaging, getToken } = require("@react-native-firebase/messaging");
-      const fcmToken = await getToken(getMessaging()).catch(() => null);
-      await authAPI.logoutAllDevices(fcmToken);
-    } catch {}
-    await clearAuthTokens();
-    mmkvDelete("unifix_cached_user");
-    mmkvDelete("unifix_active_tab");
-    mmkvDelete("unifix_staff_active_tab");
-    mmkvDelete("unifix_admin_active_tab");
-    mmkvDelete("unifix_push_token");
-    mmkvDelete("lf_feed_hash");
-    mmkvDelete("lf_claims_hash");
-    mmkvDelete("lr_feed_hash");
-    mmkvDelete("lf_feed_synced_at");
-    mmkvDelete("lf_claims_synced_at");
-    mmkvDelete("lr_feed_synced_at");
-    mmkvDelete("lf_myposts_synced_at");
-    mmkvDelete("student_complaints_hash");
-    mmkvDelete("student_complaints_synced_at");
-    mmkvDelete("staff_complaints_hash");
-    mmkvDelete("staff_complaints_synced_at");
-    mmkvDelete("admin_complaints_hash");
-    mmkvDelete("admin_complaints_synced_at");
-    useLoadingStore.getState().clearPersistedState();
-    const { resetDb } = await import("../../db/database");
-    await resetDb();
-    router.replace("/login" as any);
-  }, [router]);
+      let fcmToken: string | null = null;
+      try {
+        const { getMessaging, getToken } = require("@react-native-firebase/messaging");
+        fcmToken = await Promise.race([
+          getToken(getMessaging()),
+          new Promise<null>((res) => setTimeout(() => res(null), 3000)),
+        ]).catch(() => null);
+      } catch {}
+      try {
+        await Promise.race([
+          authAPI.logoutAllDevices(fcmToken),
+          new Promise<void>((_, rej) => setTimeout(() => rej(new Error("timeout")), 5000)),
+        ]);
+      } catch {}
+      await clearAuthTokens();
+      mmkvDelete("unifix_cached_user");
+      mmkvDelete("unifix_active_tab");
+      mmkvDelete("unifix_staff_active_tab");
+      mmkvDelete("unifix_admin_active_tab");
+      mmkvDelete("unifix_push_token");
+      mmkvDelete("lf_feed_hash");
+      mmkvDelete("lf_claims_hash");
+      mmkvDelete("lr_feed_hash");
+      mmkvDelete("lf_feed_synced_at");
+      mmkvDelete("lf_claims_synced_at");
+      mmkvDelete("lr_feed_synced_at");
+      mmkvDelete("lf_myposts_synced_at");
+      mmkvDelete("student_complaints_hash");
+      mmkvDelete("student_complaints_synced_at");
+      mmkvDelete("staff_complaints_hash");
+      mmkvDelete("staff_complaints_synced_at");
+      mmkvDelete("admin_complaints_hash");
+      mmkvDelete("admin_complaints_synced_at");
+      useLoadingStore.getState().clearPersistedState();
+      try {
+        const { resetDb } = await import("../../db/database");
+        await resetDb();
+      } catch {}
+      router.replace("/login" as any);
+    } catch {
+      setIsLoggingOut(false);
+    }
+  }, [router, isLoggingOut]);
 
 const handleDeleteLostReport = useCallback((reportId: string) => {
     setDeleteReportModal(reportId);
@@ -1051,12 +1068,12 @@ onForceRefreshFeed={forceRefreshFeed}
           <ProfileSection
             userData={userData}
             onLogout={handleLogout}
+            isLoggingOut={isLoggingOut}
             hasPendingIdCard={hasPendingIdCard}
             onIdCardUpdate={fetchProfile}
-     />
+          />
         </View>
 )}
-
         <View
           style={[
             s.bottomNav,

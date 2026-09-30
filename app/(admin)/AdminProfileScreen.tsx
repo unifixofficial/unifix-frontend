@@ -31,7 +31,8 @@ export default memo(function AdminProfileScreen({ adminData, allComplaints }: Pr
   const router = useRouter();
   const insets = useSafeAreaInsets();
 const [pwModalVisible, setPwModalVisible] = useState(false);
-  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+const [isLoggingOut, setIsLoggingOut] = useState(false);  
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
  const [confirmPassword, setConfirmPassword] = useState("");
@@ -50,39 +51,56 @@ const [profileScreen, setProfileScreen] = useState<"main" | "legal" | "settings"
   const flaggedCount = useMemo(() => allComplaints.filter((c) => c.flagged && !c.flagResolved).length, [allComplaints]);
 
 const handleLogout = useCallback(async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
     try {
-      const { getMessaging, getToken } = require("@react-native-firebase/messaging");
-      const fcmToken = await getToken(getMessaging()).catch(() => null);
-      const { authAPI } = require("../../services/api");
-      await authAPI.logoutAllDevices(fcmToken);
-    } catch {}
-    await clearAuthTokens();
-    clearUserCache();
-    const { mmkvDelete } = require('@/utils/mmkv');
-    mmkvDelete("unifix_cached_user");
-    mmkvDelete("unifix_active_tab");
-    mmkvDelete("unifix_staff_active_tab");
-    mmkvDelete("unifix_admin_active_tab");
-    mmkvDelete("unifix_push_token");
-    mmkvDelete("lf_feed_hash");
-    mmkvDelete("lf_claims_hash");
-    mmkvDelete("lr_feed_hash");
-    mmkvDelete("lf_feed_synced_at");
-    mmkvDelete("lf_claims_synced_at");
-    mmkvDelete("lr_feed_synced_at");
-    mmkvDelete("lf_myposts_synced_at");
-    mmkvDelete("student_complaints_hash");
-    mmkvDelete("student_complaints_synced_at");
-    mmkvDelete("staff_complaints_hash");
-    mmkvDelete("staff_complaints_synced_at");
-    mmkvDelete("admin_complaints_hash");
-    mmkvDelete("admin_complaints_synced_at");
-    const { useLoadingStore } = require('@/store/loadingStore');
-    useLoadingStore.getState().clearPersistedState();
-    const { resetDb } = require('../../db/database');
-    await resetDb();
-    router.replace("/(auth)/login" as any);
-  }, [router]);
+      let fcmToken: string | null = null;
+      try {
+        const { getMessaging, getToken } = require("@react-native-firebase/messaging");
+        fcmToken = await Promise.race([
+          getToken(getMessaging()),
+          new Promise<null>((res) => setTimeout(() => res(null), 3000)),
+        ]).catch(() => null);
+      } catch {}
+      try {
+        const { authAPI } = require("../../services/api");
+        await Promise.race([
+          authAPI.logoutAllDevices(fcmToken),
+          new Promise<void>((_, rej) => setTimeout(() => rej(new Error("timeout")), 5000)),
+        ]);
+      } catch {}
+      await clearAuthTokens();
+      clearUserCache();
+      const { mmkvDelete } = require('@/utils/mmkv');
+      mmkvDelete("unifix_cached_user");
+      mmkvDelete("unifix_active_tab");
+      mmkvDelete("unifix_staff_active_tab");
+      mmkvDelete("unifix_admin_active_tab");
+      mmkvDelete("unifix_push_token");
+      mmkvDelete("lf_feed_hash");
+      mmkvDelete("lf_claims_hash");
+      mmkvDelete("lr_feed_hash");
+      mmkvDelete("lf_feed_synced_at");
+      mmkvDelete("lf_claims_synced_at");
+      mmkvDelete("lr_feed_synced_at");
+      mmkvDelete("lf_myposts_synced_at");
+      mmkvDelete("student_complaints_hash");
+      mmkvDelete("student_complaints_synced_at");
+      mmkvDelete("staff_complaints_hash");
+      mmkvDelete("staff_complaints_synced_at");
+      mmkvDelete("admin_complaints_hash");
+      mmkvDelete("admin_complaints_synced_at");
+      const { useLoadingStore } = require('@/store/loadingStore');
+      useLoadingStore.getState().clearPersistedState();
+      try {
+        const { resetDb } = require('../../db/database');
+        await resetDb();
+      } catch {}
+      router.replace("/(auth)/login" as any);
+    } catch {
+      setIsLoggingOut(false);
+    }
+  }, [router, isLoggingOut]);
 
   const handlePickPhoto = useCallback(async () => {
     try {
@@ -212,8 +230,11 @@ return (
         cancelText="Cancel"
         destructive
         showIcon={false}
+        loading={isLoggingOut}
         onCancel={() => setLogoutModalVisible(false)}
-        onConfirm={() => { setLogoutModalVisible(false); handleLogout(); }}
+        onConfirm={async () => {
+          await handleLogout();
+        }}
       />
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Text style={styles.headerTitle}>Profile</Text>
@@ -269,9 +290,14 @@ return (
           ))}
         </View>
 
-    <TouchableOpacity style={styles.logoutBtn} onPress={() => setLogoutModalVisible(true)} activeOpacity={0.85}>
+<TouchableOpacity
+          style={[styles.logoutBtn, isLoggingOut && { opacity: 0.6 }]}
+          onPress={() => { if (!isLoggingOut) setLogoutModalVisible(true); }}
+          activeOpacity={0.85}
+          disabled={isLoggingOut}
+        >
           <Ionicons name="log-out-outline" size={18} color="#dc2626" />
-          <Text style={styles.logoutBtnText}>Log Out</Text>
+          <Text style={styles.logoutBtnText}>{isLoggingOut ? "Logging out..." : "Log Out"}</Text>
         </TouchableOpacity>
 
       </ScrollView>

@@ -60,8 +60,8 @@ interface ProfileSectionProps {
   onRefresh?: () => Promise<void>;
   hasPendingIdCard?: boolean;
   onIdCardUpdate?: () => void;
+  isLoggingOut?: boolean;
 }
-
 const SECURITY_ISSUE_TYPES = [
   "Unauthorized Access",
   "Account Compromise",
@@ -91,6 +91,7 @@ export default memo(function ProfileSection({
   onLogout,
   hasPendingIdCard = false,
   onIdCardUpdate,
+  isLoggingOut = false,
 }: ProfileSectionProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -514,17 +515,22 @@ const renderProfileMain = () => (
       </TouchableOpacity>
 
 <TouchableOpacity
-        style={s.logoutBtn}
-        onPress={() => setLogoutModalVisible(true)}
+        style={[s.logoutBtn, isLoggingOut && { opacity: 0.6 }]}
+        onPress={() => { if (!isLoggingOut) setLogoutModalVisible(true); }}
         activeOpacity={0.85}
+        disabled={isLoggingOut}
       >
-        <Ionicons
-          name="log-out-outline"
-          size={18}
-          color="#dc2626"
-          style={{ marginRight: 8 }}
-        />
-        <Text style={s.logoutBtnText}>Log Out</Text>
+        {isLoggingOut ? (
+          <ActivityIndicator size="small" color="#dc2626" style={{ marginRight: 8 }} />
+        ) : (
+          <Ionicons
+            name="log-out-outline"
+            size={18}
+            color="#dc2626"
+            style={{ marginRight: 8 }}
+          />
+        )}
+        <Text style={s.logoutBtnText}>{isLoggingOut ? "Logging out..." : "Log Out"}</Text>
       </TouchableOpacity>
       <Text style={s.platformLabel}>UNIFIX PLATFORM</Text>
     </ScrollView>
@@ -1154,7 +1160,7 @@ return (
         onConfirm={profileAlertConfig.onConfirm ?? (() => setProfileAlertVisible(false))}
         onCancel={profileAlertConfig.variant === "confirm" ? () => setProfileAlertVisible(false) : undefined}
       />
- <ConfirmModal
+<ConfirmModal
         visible={logoutModalVisible}
         title="Log Out"
         message="Are you sure you want to log out?"
@@ -1162,8 +1168,11 @@ return (
         cancelText="Cancel"
         destructive
         showIcon={false}
+        loading={isLoggingOut}
         onCancel={() => setLogoutModalVisible(false)}
-        onConfirm={() => { setLogoutModalVisible(false); onLogout(); }}
+        onConfirm={async () => {
+          await onLogout();
+        }}
       />
       {profileScreen === "main" && renderProfileMain()}
       {profileScreen === "personalInfo" && renderPersonalInfo()}

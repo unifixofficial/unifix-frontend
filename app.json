@@ -81,11 +81,13 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "extra": {
+"extra": {
       "sentry": {
         "dsn": "https://65abf5b0fb560cdb4b6b8c4d6e4c6ff3@o4511512290066432.ingest.us.sentry.io/4511880487960576"
       },
-      "router": {},
+      "router": {
+        "unstable_skip_app_state_restoration": true
+      },
       "eas": {
         "projectId": "3b0736e7-eb68-44f4-8ce7-3b9b6e165fa8"
       }

@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Modal,
   Pressable,
@@ -21,6 +22,7 @@ interface ConfirmModalProps {
   destructive?: boolean;
   variant?: ModalVariant;
   showIcon?: boolean;
+  loading?: boolean;
   onConfirm: () => void;
   onCancel?: () => void;
 }
@@ -41,6 +43,7 @@ export default function ConfirmModal({
   destructive = false,
   variant = "confirm",
   showIcon = true,
+  loading = false,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
@@ -68,6 +71,7 @@ export default function ConfirmModal({
   }, [visible]);
 
   const handleBackdropPress = () => {
+    if (loading) return;
     if (onCancel) onCancel();
     else onConfirm();
   };
@@ -116,11 +120,12 @@ export default function ConfirmModal({
             {!isSingleButton && (
               <>
                 <TouchableOpacity
-                  style={styles.cancelBtn}
-                  onPress={onCancel}
+                  style={[styles.cancelBtn, loading && { opacity: 0.4 }]}
+                  onPress={loading ? undefined : onCancel}
                   activeOpacity={0.7}
                   accessibilityLabel={cancelText}
                   accessibilityRole="button"
+                  disabled={loading}
                 >
                   <Text style={styles.cancelText}>{cancelText}</Text>
                 </TouchableOpacity>
@@ -129,14 +134,19 @@ export default function ConfirmModal({
             )}
             <TouchableOpacity
               style={styles.confirmBtn}
-              onPress={onConfirm}
+              onPress={loading ? undefined : onConfirm}
               activeOpacity={0.7}
               accessibilityLabel={confirmText}
               accessibilityRole="button"
+              disabled={loading}
             >
-              <Text style={[styles.confirmText, { color: confirmColor }]}>
-                {confirmText}
-              </Text>
+              {loading ? (
+                <ActivityIndicator size="small" color={confirmColor} />
+              ) : (
+                <Text style={[styles.confirmText, { color: confirmColor }]}>
+                  {confirmText}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </Animated.View>
