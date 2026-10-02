@@ -1,3 +1,4 @@
+import { uploadPhotoViaBackend } from '@/services/photoUpload';
 import { router } from "expo-router";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -27,23 +28,13 @@ import { authAPI } from "../../services/api";
 import { getStaffComplaintsFromDb, syncStaffComplaints } from "../../sync/syncManager";
 
 
-const CLOUDINARY_CLOUD = "dcizaxjul";
-const CLOUDINARY_PRESET = "unifix_upload";
-const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`;
 
-async function uploadToCloudinary(uri: string, folder: string): Promise<string> {
-  const formData = new FormData();
-  const name = uri.split("/").pop() || `upload_${Date.now()}.jpg`;
-  formData.append("file", { uri, type: "image/jpeg", name } as any);
-  formData.append("upload_preset", CLOUDINARY_PRESET);
-  formData.append("folder", folder);
-  const res = await fetch(CLOUDINARY_UPLOAD_URL, {
-    method: "POST",
-    body: formData,
-  });
-  if (!res.ok) throw new Error("Upload failed");
-  const data = await res.json();
-  return data.secure_url;
+async function uploadToCloudinary(
+  uri: string,
+  folder: string,
+): Promise<string> {
+  const kind = folder.includes('complaint') ? 'complaint' : (folder.includes('lost') || folder.includes('Found')) ? 'lostfound' : folder.includes('idcard') || folder.includes('IdCard') ? 'idcard' : (folder.includes('profile') || folder.includes('avatar')) ? 'profile' : 'general';
+  return uploadPhotoViaBackend(uri, kind);
 }
 
 const SECURITY_ISSUE_TYPES = [

@@ -1,3 +1,4 @@
+import { uploadPhotoViaBackend } from '@/services/photoUpload';
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import React, { memo, useCallback, useState } from "react";
@@ -20,9 +21,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { lostFoundAPI, lostReportsAPI } from "../../../services/api";
 import { useMasterData, getLFCategories } from "../../../hooks/useMasterData";
-const CLOUDINARY_CLOUD = "dcizaxjul";
-const CLOUDINARY_PRESET = "unifix_upload";
-const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`;
 
 
 type LostItem = {
@@ -120,15 +118,8 @@ async function uploadToCloudinary(
   uri: string,
   folder: string,
 ): Promise<string> {
-  const formData = new FormData();
-  const name = uri.split("/").pop() || `upload_${Date.now()}.jpg`;
-  formData.append("file", { uri, type: "image/jpeg", name } as any);
-  formData.append("upload_preset", CLOUDINARY_PRESET);
-  formData.append("folder", folder);
-  const res = await fetch(CLOUDINARY_URL, { method: "POST", body: formData });
-  if (!res.ok) throw new Error("Upload failed");
-  const data = await res.json();
-  return data.secure_url;
+  const kind = folder.includes('complaint') ? 'complaint' : (folder.includes('lost') || folder.includes('Found')) ? 'lostfound' : folder.includes('idcard') || folder.includes('IdCard') ? 'idcard' : (folder.includes('profile') || folder.includes('avatar')) ? 'profile' : 'general';
+  return uploadPhotoViaBackend(uri, kind);
 }
 export default memo(function LostFoundSection({
   feedItems,
@@ -344,21 +335,7 @@ const handlePostFoundPickPhoto = useCallback(() => {
       let photoUrl: string | null = null;
       if (postFoundPhoto) {
         setPostFoundUploadingPhoto(true);
-        const formData = new FormData();
-        formData.append("file", {
-          uri: postFoundPhoto.uri,
-          type: "image/jpeg",
-          name: postFoundPhoto.name,
-        } as any);
-        formData.append("upload_preset", CLOUDINARY_PRESET);
-        formData.append("folder", "unifix/lostFound");
-        const res = await fetch(CLOUDINARY_URL, {
-          method: "POST",
-          body: formData,
-        });
-        if (!res.ok) throw new Error("Image upload failed");
-        const data = await res.json();
-        photoUrl = data.secure_url;
+        photoUrl = await uploadPhotoViaBackend(postFoundPhoto.uri, 'lostfound', postFoundPhoto.name);
         setPostFoundUploadingPhoto(false);
       }
 await lostFoundAPI.postItem({
@@ -404,21 +381,7 @@ await lostFoundAPI.postItem({
       let imageUrl: string | null = null;
       if (postLostPhoto) {
         setPostLostUploadingPhoto(true);
-        const formData = new FormData();
-        formData.append("file", {
-          uri: postLostPhoto.uri,
-          type: "image/jpeg",
-          name: postLostPhoto.name,
-        } as any);
-        formData.append("upload_preset", CLOUDINARY_PRESET);
-        formData.append("folder", "unifix/lostReports");
-        const res = await fetch(CLOUDINARY_URL, {
-          method: "POST",
-          body: formData,
-        });
-        if (!res.ok) throw new Error("Image upload failed");
-        const data = await res.json();
-        imageUrl = data.secure_url;
+        imageUrl = await uploadPhotoViaBackend(postLostPhoto.uri, 'lostfound', postLostPhoto.name);
         setPostLostUploadingPhoto(false);
       }
       await lostReportsAPI.post({

@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { getAccessToken, clearAuthTokens } from '@/utils/secureAuth';
+import { uploadPhotoViaBackend, uploadFileViaBackend } from '@/services/photoUpload';
 import { saveUserCache, clearUserCache } from '@/utils/cache';
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
@@ -20,9 +21,6 @@ import {
   View,
 } from "react-native";
 import { authAPI } from "../../services/api";
-const CLOUDINARY_CLOUD = "dcizaxjul";
-const CLOUDINARY_PRESET = "unifix_upload";
-const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/auto/upload`;
 
 const YEARS = ["1", "2", "3", "4"];
 const BRANCHES = ["Computer Engineering", "IT", "EXTC", "Mechanical", "Civil"];
@@ -46,21 +44,7 @@ async function uploadToCloudinary(
   fileName: string,
   folder: string,
 ): Promise<string> {
-  const formData = new FormData();
-  const ext = fileName.split(".").pop()?.toLowerCase() || "jpg";
-  const mime =
-    ext === "pdf"
-      ? "application/pdf"
-      : ext === "png"
-        ? "image/png"
-        : "image/jpeg";
-  formData.append("file", { uri, type: mime, name: fileName } as any);
-  formData.append("upload_preset", CLOUDINARY_PRESET);
-  formData.append("folder", `unifix/${folder}`);
-  const res = await fetch(CLOUDINARY_URL, { method: "POST", body: formData });
-  if (!res.ok) throw new Error("Cloudinary upload failed");
-  const data = await res.json();
-  return data.secure_url;
+  return uploadFileViaBackend(uri, fileName, 'idcard');
 }
 
 function DropdownPicker({

@@ -14,10 +14,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getValidAccessToken } from '@/utils/secureAuth';
+import { uploadPhotoViaBackend } from '@/services/photoUpload';
 import { useMasterData, resolveRoom as resolveRoomFromMaster } from "../../../hooks/useMasterData";
-const CLOUDINARY_CLOUD = "dcizaxjul";
-const CLOUDINARY_PRESET = "unifix_upload";
-const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`;
 
 
 
@@ -30,15 +28,8 @@ async function uploadToCloudinary(
   uri: string,
   folder: string,
 ): Promise<string> {
-  const formData = new FormData();
-  const name = uri.split("/").pop() || `upload_${Date.now()}.jpg`;
-  formData.append("file", { uri, type: "image/jpeg", name } as any);
-  formData.append("upload_preset", CLOUDINARY_PRESET);
-  formData.append("folder", folder);
-  const res = await fetch(CLOUDINARY_URL, { method: "POST", body: formData });
-  if (!res.ok) throw new Error("Upload failed");
-  const data = await res.json();
-  return data.secure_url;
+  const kind = folder.includes('complaint') ? 'complaint' : (folder.includes('lost') || folder.includes('Found')) ? 'lostfound' : folder.includes('idcard') || folder.includes('IdCard') ? 'idcard' : (folder.includes('profile') || folder.includes('avatar')) ? 'profile' : 'general';
+  return uploadPhotoViaBackend(uri, kind);
 }
 
 export default memo(function ReportSection({
@@ -149,21 +140,7 @@ const freshToken = await getValidAccessToken();
       if (reportPhoto) {
         setReportUploadingPhoto(true);
         try {
-          const formData = new FormData();
-          formData.append("file", {
-            uri: reportPhoto.uri,
-            type: "image/jpeg",
-            name: reportPhoto.name,
-          } as any);
-          formData.append("upload_preset", CLOUDINARY_PRESET);
-          formData.append("folder", "unifix/complaints");
-          const res = await fetch(CLOUDINARY_URL, {
-            method: "POST",
-            body: formData,
-          });
-          if (!res.ok) throw new Error("Upload failed");
-          const data = await res.json();
-          photoUrl = data.secure_url;
+          photoUrl = await uploadPhotoViaBackend(reportPhoto.uri, 'complaint', reportPhoto.name);
         } catch {
           setReportError("Failed to upload photo. Please try again.");
           return;

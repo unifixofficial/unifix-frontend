@@ -3,6 +3,20 @@ import { clearUserCache } from '@/utils/cache';
 import { mmkvDelete } from '@/utils/mmkv';
 
 const BASE_URL = process.env.EXPO_PUBLIC_BASE_URL;
+const REQUEST_TIMEOUT_MS = 15000;
+const fetchWithTimeout = async (url: string, options: any): Promise<any> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw new Error('Request timed out. Please check your connection.');
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+};
 
 const TAB_KEYS = ['unifix_active_tab', 'unifix_staff_active_tab', 'unifix_admin_active_tab'];
 
@@ -29,7 +43,7 @@ const refreshAccessToken = async (): Promise<string> => {
       const refreshToken = await getRefreshToken();
       if (!refreshToken) throw new Error('SESSION_EXPIRED');
 
-      const res = await fetch(`${BASE_URL}/auth/refresh`, {
+      const res = await fetchWithTimeout(`${BASE_URL}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
@@ -77,7 +91,7 @@ const request = async (
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${BASE_URL}${endpoint}`, {
+  const res = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
@@ -87,7 +101,7 @@ const request = async (
     try {
       const freshToken = await refreshAccessToken();
       headers['Authorization'] = `Bearer ${freshToken}`;
-      const retry = await fetch(`${BASE_URL}${endpoint}`, {
+      const retry = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,

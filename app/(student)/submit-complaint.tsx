@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import { getValidAccessToken } from '@/utils/secureAuth';
+import { uploadPhotoViaBackend } from '@/services/photoUpload';
 import { useEffect, useState } from "react";
 import AttachmentPickerModal from "@/components/AttachmentPickerModal";
 import {
@@ -19,9 +20,6 @@ import {
 
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BASE_URL;
-const CLOUDINARY_CLOUD = "dcizaxjul";
-const CLOUDINARY_PRESET = "unifix_upload";
-const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`;
 import { useMasterData, resolveRoom as resolveRoomFromMaster, type Category } from "../../hooks/useMasterData";
 const SUB_ISSUES: Record<string, string[]> = {
   electrical: [
@@ -87,14 +85,7 @@ async function uploadToCloudinary(
   uri: string,
   fileName: string,
 ): Promise<string> {
-  const formData = new FormData();
-  formData.append("file", { uri, type: "image/jpeg", name: fileName } as any);
-  formData.append("upload_preset", CLOUDINARY_PRESET);
-  formData.append("folder", "unifix/complaints");
-  const res = await fetch(CLOUDINARY_URL, { method: "POST", body: formData });
-  if (!res.ok) throw new Error("Image upload failed");
-  const data = await res.json();
-  return data.secure_url;
+  return uploadPhotoViaBackend(uri, 'complaint', fileName);
 }
 
 export default function SubmitComplaintScreen() {

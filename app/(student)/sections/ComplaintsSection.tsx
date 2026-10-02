@@ -336,6 +336,11 @@ const handleSubmitRating = useCallback(async () => {
           <FlatList
             data={filteredComplaints}
             keyExtractor={(item) => item.id}
+            initialNumToRender={10}
+            maxToRenderPerBatch={10}
+            windowSize={7}
+            removeClippedSubviews={true}
+            updateCellsBatchingPeriod={50}
             contentContainerStyle={[
               styles.tabContainer,
               { paddingBottom: bottomNavHeight + 20 },

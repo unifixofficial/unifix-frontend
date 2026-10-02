@@ -3,6 +3,7 @@ import ConfirmModal from "@/components/ConfirmModal";
 import Toast from "@/components/Toast";
 import { useToast } from "@/hooks/useToast";
 import { getValidAccessToken, clearAuthTokens } from '@/utils/secureAuth';
+import { uploadPhotoViaBackend } from '@/services/photoUpload';
 import { clearUserCache } from '@/utils/cache';
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
@@ -114,15 +115,8 @@ const handleLogout = useCallback(async () => {
       });
       if (result.canceled) return;
       const uri = result.assets[0].uri;
-      const formData = new FormData();
       const name = uri.split("/").pop() || `upload_${Date.now()}.jpg`;
-      formData.append("file", { uri, type: "image/jpeg", name } as any);
-      formData.append("upload_preset", "unifix_upload");
-      formData.append("folder", "unifix/profiles");
-      const res = await fetch("https://api.cloudinary.com/v1_1/dcizaxjul/image/upload", { method: "POST", body: formData });
-      if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
-      const url = data.secure_url;
+      const url = await uploadPhotoViaBackend(uri, 'profile', name);
 const token = await getValidAccessToken();
       await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/auth/update-profile`,{
         method: "POST",

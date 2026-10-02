@@ -1,3 +1,4 @@
+import { uploadPhotoViaBackend } from '@/services/photoUpload';
 import ScreenWrapper from "@/wrappers/ScreenWrapper";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -31,9 +32,6 @@ import { useLoadingStore } from "../../store/loadingStore";
 const { width: SW, height: SH } = Dimensions.get("window");
 
 
-const CLOUDINARY_CLOUD = "dcizaxjul";
-const CLOUDINARY_PRESET = "unifix_upload";
-const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`;
 
 type LostItem = {
   id: string;
@@ -285,14 +283,7 @@ const handlePostFoundPickPhoto = useCallback(() => {
       let photoUrl: string | null = null;
       if (postFoundPhoto) {
         setPostFoundUploadingPhoto(true);
-        const formData = new FormData();
-        formData.append("file", { uri: postFoundPhoto.uri, type: "image/jpeg", name: postFoundPhoto.name } as any);
-        formData.append("upload_preset", CLOUDINARY_PRESET);
-        formData.append("folder", "unifix/lostFound");
-        const res = await fetch(CLOUDINARY_UPLOAD_URL, { method: "POST", body: formData });
-        if (!res.ok) throw new Error("Image upload failed");
-        const data = await res.json();
-        photoUrl = data.secure_url;
+        photoUrl = await uploadPhotoViaBackend(postFoundPhoto.uri, 'lostfound', postFoundPhoto.name);
         setPostFoundUploadingPhoto(false);
       }
       await lostFoundAPI.postItem({
