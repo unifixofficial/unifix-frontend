@@ -15,6 +15,8 @@ import * as Updates from "expo-updates";
 import { useEffect, useRef, useState } from "react";
 
 import NetInfo from "@react-native-community/netinfo";
+import NetworkBanner from "@/components/NetworkBanner";
+import { useNetworkStore } from "@/store/networkStore";
 import ConfirmModal from "@/components/ConfirmModal";
 import {
   Animated,
@@ -73,6 +75,43 @@ const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
   const [updatingApp, setUpdatingApp] = useState(false);
   const [exitModalVisible, setExitModalVisible] = useState(false);
+  const { setOffline, setRestored, setOnline } = useNetworkStore();
+  const wasOffline = useRef(false);
+  const netInfoInitialized = useRef(false);
+
+  useEffect(() => {
+    const initNetwork = async () => {
+      const state = await NetInfo.fetch();
+      const online = !!(state.isConnected && state.isInternetReachable);
+      if (!online) {
+        wasOffline.current = true;
+        setOffline();
+      } else {
+        setOnline();
+      }
+      netInfoInitialized.current = true;
+    };
+
+    initNetwork();
+
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      if (!netInfoInitialized.current) return;
+      const online = !!(state.isConnected && state.isInternetReachable);
+      if (!online) {
+        wasOffline.current = true;
+        setOffline();
+      } else {
+        if (wasOffline.current) {
+          wasOffline.current = false;
+          setRestored();
+        } else {
+          setOnline();
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (__DEV__) return;
@@ -270,7 +309,8 @@ const onBackPress = () => {
   }, []);
 
   return (
- <>
+    <>
+      <NetworkBanner />
       <ConfirmModal
         visible={exitModalVisible}
         variant="confirm"
